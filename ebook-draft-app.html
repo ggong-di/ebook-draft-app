@@ -1,0 +1,2139 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>📚 전자책 초안 작성 앱</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;700;900&family=Nanum+Gothic:wght@400;700;800&family=Nanum+Myeongjo:wght@400;700&family=Nanum+Square:wght@400;700;800&family=Black+Han+Sans&display=swap" rel="stylesheet">
+<style>
+* { font-family: 'Noto Sans KR', sans-serif; box-sizing: border-box; }
+body { background: #eef0ff; min-height: 100vh; margin: 0; }
+.g-btn { background: linear-gradient(135deg,#667eea,#764ba2); color:#fff; }
+.g-btn:hover { opacity:.9; }
+.g-bg  { background: linear-gradient(135deg,#667eea,#764ba2); }
+.card  { background:rgba(255,255,255,.95); border-radius:1rem; padding:1.25rem; box-shadow:0 2px 12px rgba(100,100,200,.08); }
+.node-g { cursor:pointer; }
+.node-g:hover circle { filter:brightness(.88); }
+.step-btn { transition:.2s; }
+.scard { border:2px solid #e5e7eb; border-radius:.75rem; padding:1rem; cursor:pointer; transition:.2s; }
+.scard:hover { border-color:#a5b4fc; transform:translateY(-2px); box-shadow:0 6px 20px rgba(102,126,234,.18); }
+.scard.on { border-color:#667eea; background:#f0f2ff; }
+.fcard { border:2px solid #e5e7eb; border-radius:.75rem; padding:.75rem 1rem; cursor:pointer; transition:.2s; }
+.fcard:hover { border-color:#a5b4fc; }
+.fcard.on { border-color:#667eea; background:#f0f2ff; }
+.tcard { border:2px solid #e5e7eb; border-radius:.75rem; padding:.75rem 1rem; cursor:pointer; transition:.2s; }
+.tcard:hover { border-color:#667eea; background:#fafaff; transform:translateY(-1px); }
+.tcard.on { border-color:#667eea; background:#f0f2ff; }
+.tag { display:inline-block; padding:4px 12px; border-radius:20px; font-size:12px; margin:3px; cursor:pointer; transition:.15s; }
+.tag:hover { transform:scale(1.06); }
+.toc-row { transition:.15s; border-radius:.5rem; }
+.toc-row:hover { background:#f3f4ff; }
+input,textarea { outline:none; transition:border .2s; }
+input:focus,textarea:focus { border-color:#667eea !important; }
+::-webkit-scrollbar { width:5px; }
+::-webkit-scrollbar-thumb { background:#c5c5d8; border-radius:3px; }
+.cover-wrap { border-radius:.75rem; min-height:300px; position:relative; overflow:hidden; }
+</style>
+</head>
+<body>
+<div id="root" style="text-align:center;padding:60px;color:#888;font-family:sans-serif">
+  <p style="font-size:18px">⏳ 앱 로딩 중...</p>
+  <p style="font-size:13px;margin-top:8px">인터넷 연결을 확인해주세요</p>
+</div>
+
+<script type="module">
+import { h, render, Fragment } from 'https://esm.sh/preact@10.23.1';
+import { useState, useRef, useEffect } from 'https://esm.sh/preact@10.23.1/hooks';
+import htm from 'https://esm.sh/htm@3.1.1';
+const html = htm.bind(h);
+
+// ── 상수 ──────────────────────────────────────────────
+const STEPS = ['브레인스토밍','마인드맵 작성','목차 구성','문체 선택','제목 다듬기','표지 디자인'];
+const SICONS = ['💡','🗺️','📋','✍️','📝','🎨'];
+
+const LEVEL_COLORS = [
+  '#FFD93D',
+  ['#FF8A80','#69D2A7','#85C1E9','#C39BD3','#F8C471','#76D7C4','#F1948A','#82C4E8'],
+  ['#FFE5CC','#D5F5E3','#D6EAF8','#EAD9F7','#FEF9E7','#D1F2EB','#FDECEA','#D6EFF7'],
+];
+
+const WRITING_STYLES = [
+  {id:'casual',   name:'친근한 대화체',   icon:'😊', desc:'독자와 친구처럼 편하게 대화하는 스타일',     ex:'"이렇게 하면 정말 쉬워요! 저도 처음엔 몰랐는데..."'},
+  {id:'narrative',name:'스토리텔링체',    icon:'📖', desc:'경험과 사례를 이야기로 풀어내 몰입시키는 스타일', ex:'"그날 아침, 나는 작은 카페에 앉아 있었다..."'},
+  {id:'howto',    name:'단계별 실용 가이드',icon:'🔧', desc:'Step-by-Step으로 명확하게 설명하는 스타일',  ex:'"Step 1. 먼저 준비합니다. Step 2. 다음으로..."'},
+  {id:'inspir',   name:'동기부여·감성체', icon:'✨', desc:'독자의 감정을 움직이고 행동을 이끄는 스타일',  ex:'"당신은 이미 충분히 준비돼 있습니다!"'},
+  {id:'formal',   name:'전문·격식체',     icon:'🎩', desc:'전문 지식을 권위 있게 전달하는 격식체',       ex:'"본 장에서는 핵심 원리를 체계적으로 고찰한다."'},
+  {id:'journal',  name:'일기·에세이체',   icon:'🌿', desc:'개인적 성찰과 감상을 솔직하게 나누는 스타일', ex:'"오늘도 나는 생각했다. 이 일이 내게 무슨..."'},
+];
+
+const CATEGORIES = ['자기계발','경제·경영','건강·다이어트','여행·취미','요리·살림','육아·교육','심리·힐링','IT·테크','재테크·투자','패션·뷰티','글쓰기·창작','부업·수익화'];
+
+const FONTS = [
+  {id:'noto',    name:'노토 산스 KR',  css:'"Noto Sans KR",sans-serif',    desc:'가독성 최고의 모던 폰트'},
+  {id:'gothic',  name:'나눔 고딕',     css:'"Nanum Gothic",sans-serif',    desc:'깔끔하고 단정한 국민 폰트'},
+  {id:'myeong',  name:'나눔 명조',     css:'"Nanum Myeongjo",serif',       desc:'고급스러운 전통 명조체'},
+  {id:'square',  name:'나눔 스퀘어',   css:'"Nanum Square",sans-serif',    desc:'세련된 트렌디 스퀘어체'},
+  {id:'blackhan', name:'블랙 한 산스', css:'"Black Han Sans",sans-serif',   desc:'굵고 강렬한 포스터형 폰트'},
+];
+
+// 프리셋: { id, name, bg1, bg2, text, accent }
+const PRESETS = [
+  // ── 밝은 파스텔 ──
+  {id:'cream',    name:'크림 화이트',   bg1:'#fdf6ec',bg2:'#f5e6d0',text:'#3d2b1f',accent:'#c0873f'},
+  {id:'skyblue',  name:'스카이 블루',   bg1:'#e8f4fd',bg2:'#bee3f8',text:'#1a3a5c',accent:'#2980b9'},
+  {id:'mint',     name:'민트 그린',     bg1:'#eafaf1',bg2:'#a9dfbf',text:'#145a32',accent:'#1e8449'},
+  {id:'blush',    name:'블러시 핑크',   bg1:'#fdf2f8',bg2:'#f9c4e1',text:'#5c1442',accent:'#e74c8b'},
+  {id:'lavlt',    name:'연 라벤더',     bg1:'#f4f0ff',bg2:'#d7c9f9',text:'#3d1f6e',accent:'#7c4dce'},
+  {id:'lemon',    name:'레몬 옐로우',   bg1:'#fffef0',bg2:'#fff59d',text:'#3d3500',accent:'#f9a825'},
+  {id:'peach',    name:'피치 코럴',     bg1:'#fff5f0',bg2:'#ffccb3',text:'#5c2600',accent:'#e85d04'},
+  {id:'lilac',    name:'라일락',        bg1:'#f8f0ff',bg2:'#e0c3fc',text:'#44006e',accent:'#bf5af2'},
+  // ── 중간 톤 ──
+  {id:'teal',     name:'틸 그린',       bg1:'#e0f2f1',bg2:'#4db6ac',text:'#004d40',accent:'#00897b'},
+  {id:'dustpink', name:'더스티 핑크',   bg1:'#fce4ec',bg2:'#f48fb1',text:'#4a0030',accent:'#ad1457'},
+  {id:'sage',     name:'세이지 그린',   bg1:'#ecf4ec',bg2:'#87b99a',text:'#1b3a28',accent:'#388e3c'},
+  {id:'golden',   name:'골든 아워',     bg1:'#fff8e1',bg2:'#ffcc02',text:'#3e2400',accent:'#e65100'},
+  {id:'steel',    name:'스틸 블루',     bg1:'#e3edf7',bg2:'#6a9fc2',text:'#0d2137',accent:'#0277bd'},
+  {id:'rose2',    name:'로즈 골드',     bg1:'#fff0eb',bg2:'#e8a090',text:'#3d1008',accent:'#bf360c'},
+  {id:'violet',   name:'바이올렛',      bg1:'#ede7f6',bg2:'#9575cd',text:'#1a0059',accent:'#ce93d8'},
+  {id:'terracot', name:'테라코타',      bg1:'#fbe9e7',bg2:'#c97b54',text:'#3e1005',accent:'#ff8a65'},
+  // ── 어두운 톤 ──
+  {id:'midnight', name:'미드나잇 블루', bg1:'#1a1a2e',bg2:'#0f3460',text:'#ffffff',accent:'#e94560'},
+  {id:'forest',   name:'포레스트 그린', bg1:'#1a2f1a',bg2:'#1a3d1a',text:'#f0fff0',accent:'#76c442'},
+  {id:'deeprose', name:'딥 로즈',       bg1:'#2c0a0a',bg2:'#7b2d2d',text:'#fff0f0',accent:'#ffd700'},
+  {id:'galaxy',   name:'갤럭시 퍼플',   bg1:'#0f0c29',bg2:'#302b63',text:'#ffffff',accent:'#e040fb'},
+  {id:'aurora',   name:'오로라',        bg1:'#0d1b2a',bg2:'#11998e',text:'#ffffff',accent:'#38ef7d'},
+  {id:'burgundy', name:'버건디',        bg1:'#1a0020',bg2:'#560d42',text:'#fce4ec',accent:'#f48fb1'},
+  {id:'charcoal', name:'차콜',          bg1:'#1c1c1e',bg2:'#2c2c2e',text:'#ffffff',accent:'#ff9f0a'},
+  {id:'navy',     name:'딥 네이비',     bg1:'#0a192f',bg2:'#172a45',text:'#ccd6f6',accent:'#64ffda'},
+];
+
+const PATTERNS = [
+  '숫자 + 비밀/법칙/습관 → "돈의 7가지 법칙"',
+  '나/당신 + 변화 → "어제의 나는 틀렸다"',
+  '질문형 → "왜 부자들은 아침 5시에 일어날까?"',
+  '역설형 → "행복을 찾지 마라"',
+  '단순 선언형 → "그냥 하지 말라"',
+  '○○의 기술/힘 → "경청의 기술"',
+];
+
+// ── 내보내기 유틸 ─────────────────────────────────────
+const dlFile = (content, name, mime='text/plain;charset=utf-8') => {
+  const a = Object.assign(document.createElement('a'), {
+    href: URL.createObjectURL(new Blob([content], {type: mime})),
+    download: name,
+  });
+  a.click(); URL.revokeObjectURL(a.href);
+};
+
+const safeFilename = s => (s||'전자책초안').replace(/[\\/:"*?<>|]/g,'_').slice(0,40);
+
+const clipCopy = text => {
+  if(navigator.clipboard?.writeText) return navigator.clipboard.writeText(text);
+  return new Promise(res => {
+    const ta = Object.assign(document.createElement('textarea'), {value: text, style:'position:fixed;opacity:0'});
+    document.body.appendChild(ta); ta.select(); document.execCommand('copy');
+    document.body.removeChild(ta); res();
+  });
+};
+
+const buildMarkdown = (titleData, toc, styleData, coverData, mindMap) => {
+  const lines = [];
+  const title = titleData?.final || '(제목 미정)';
+  lines.push(`# ${title}`);
+  if(titleData?.sub) lines.push(`\n> ${titleData.sub}\n`);
+  lines.push('');
+  if(coverData?.author) lines.push(`- **저자:** ${coverData.author}`);
+  if(styleData?.cat)    lines.push(`- **카테고리:** ${styleData.cat}`);
+  const sname = WRITING_STYLES.find(s=>s.id===styleData?.style)?.name;
+  if(sname) lines.push(`- **문체:** ${sname}`);
+  lines.push('\n---\n\n## 📋 목차\n');
+  (toc||[]).forEach((ch, ci) => {
+    lines.push(`### 제${ci+1}장. ${ch.title}\n`);
+    (ch.sections||[]).forEach((s, si) => {
+      lines.push(`- **${ci+1}.${si+1}** ${s.title}`);
+      (s.subs||[]).forEach((sub, ki) => lines.push(`  - ${ci+1}.${si+1}.${ki+1} ${sub.title}`));
+    });
+    lines.push('');
+  });
+  if(mindMap?.children?.length) {
+    lines.push('\n---\n\n## 🗺️ 마인드맵\n');
+    lines.push(`**중심 주제:** ${mindMap.text}\n`);
+    mindMap.children.forEach(n => {
+      lines.push(`- ${n.text}${n.children.length ? ` (${n.children.map(c=>c.text).join(', ')})` : ''}`);
+    });
+  }
+  if(coverData?.intro) { lines.push('\n---\n\n## 💬 표지 소개글\n'); lines.push(coverData.intro); }
+  if(coverData?.prompt) { lines.push('\n---\n\n## 🖼️ AI 이미지 프롬프트\n\n```'); lines.push(coverData.prompt); lines.push('```'); }
+  return lines.join('\n');
+};
+
+const buildCoverHTML = (titleData, coverData) => {
+  const title  = titleData?.final || '책 제목';
+  const sub    = titleData?.sub || coverData?.sub || '';
+  const author = coverData?.author || '';
+  const intro  = coverData?.intro || '';
+  const bg1    = coverData?.bg1   || '#fdf6ec';
+  const bg2    = coverData?.bg2   || '#f5e6d0';
+  const textC  = coverData?.textC || '#3d2b1f';
+  const accent = coverData?.accent|| '#c0873f';
+  const tf = coverData?.fonts?.[0]?.css || '"Noto Sans KR",sans-serif';
+  const bf = coverData?.fonts?.[1]?.css || 'serif';
+  const divider = (textC==='#ffffff'||textC.startsWith('#fff')||textC.startsWith('#ccd'))
+    ? 'rgba(255,255,255,0.25)' : 'rgba(0,0,0,0.15)';
+  return `<!DOCTYPE html>
+<html lang="ko"><head>
+<meta charset="UTF-8">
+<title>${title} — 표지</title>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;700;900&family=Nanum+Gothic:wght@400;700&family=Nanum+Myeongjo:wght@400;700&family=Nanum+Square:wght@400;700&family=Gmarket+Sans:wght@300;500;700&display=swap" rel="stylesheet">
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{display:flex;align-items:center;justify-content:center;min-height:100vh;background:#e8e8e8;font-family:'Noto Sans KR',sans-serif}
+.cover{width:210mm;height:297mm;background:linear-gradient(160deg,${bg1},${bg2});color:${textC};position:relative;overflow:hidden;box-shadow:0 20px 60px rgba(0,0,0,.3);display:flex;flex-direction:column;padding:14mm}
+.deco{position:absolute;inset:0;pointer-events:none;opacity:.1}
+.dc1{position:absolute;top:6%;right:8%;width:22%;aspect-ratio:1;border-radius:50%;border:2px solid ${accent}}
+.dc2{position:absolute;bottom:12%;left:5%;width:14%;aspect-ratio:1;border-radius:50%;border:1px solid ${accent}}
+.db1{position:absolute;top:20%;left:8%;width:3mm;height:25mm;border-radius:2mm;background:${accent}}
+.db2{position:absolute;top:20%;left:12%;width:2mm;height:16mm;border-radius:2mm;background:${accent}}
+.aline{width:30mm;height:3px;border-radius:2px;background:${accent};margin-bottom:10mm}
+.intro{font-size:11pt;opacity:.75;margin-bottom:8mm;line-height:1.7;font-family:${bf};white-space:pre-line}
+.main{flex:1;display:flex;flex-direction:column;justify-content:center}
+h1{font-family:${tf};font-weight:900;font-size:28pt;line-height:1.25;margin-bottom:8mm;word-break:keep-all}
+.sub{font-family:${bf};font-size:13pt;opacity:.8;line-height:1.7;word-break:keep-all}
+.foot{padding-top:6mm;border-top:1px solid ${divider};display:flex;justify-content:space-between;align-items:center}
+.author{font-family:${bf};font-size:11pt;font-weight:600;opacity:.9}
+.orn{color:${accent};font-size:18pt}
+@media print{body{background:none}.cover{box-shadow:none}}
+</style></head><body>
+<div class="cover">
+  <div class="deco"><div class="dc1"></div><div class="dc2"></div><div class="db1"></div><div class="db2"></div></div>
+  <div class="aline"></div>
+  ${intro?`<p class="intro">${intro.replace(/\n/g,'<br>')}</p>`:''}
+  <div class="main">
+    <h1>${title}</h1>
+    ${sub?`<p class="sub">${sub}</p>`:''}
+  </div>
+  <div class="foot">
+    <span class="author">${author||'저자명'}</span>
+    <span class="orn">◈</span>
+  </div>
+</div>
+</body></html>`;
+};
+
+const buildSummaryHTML = (titleData, toc, styleData, coverData, mindMap) => {
+  const title  = titleData?.final || '전자책 초안';
+  const sname  = WRITING_STYLES.find(s=>s.id===styleData?.style)?.name || '';
+  const tocRows = (toc||[]).map((ch, ci) => {
+    const secs = (ch.sections||[]).map((s,si)=>`<li><span class="num">${ci+1}.${si+1}</span>${s.title}</li>`).join('');
+    return `<div class="ch"><div class="ch-head"><span class="badge">${ci+1}장</span><span>${ch.title}</span></div>${secs?`<ul>${secs}</ul>`:''}</div>`;
+  }).join('');
+  const mmRows = (mindMap?.children||[]).map(n =>
+    `<li><span class="dot" style="background:${n.color}"></span>${n.text}${n.children.length?` <small>(${n.children.map(c=>c.text).join(', ')})</small>`:''}</li>`
+  ).join('');
+  return `<!DOCTYPE html>
+<html lang="ko"><head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>${title} — 전자책 초안</title>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700;900&display=swap" rel="stylesheet">
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Noto Sans KR',sans-serif;background:#f5f5fa;color:#222;line-height:1.8}
+.wrap{max-width:800px;margin:0 auto;padding:40px 24px}
+.hero{background:linear-gradient(135deg,#667eea,#764ba2);color:#fff;border-radius:16px;padding:40px;margin-bottom:28px}
+.hero h1{font-size:2em;font-weight:900;line-height:1.3;margin-bottom:8px}
+.hero .sub{opacity:.85;font-size:1.05em}
+.meta{display:flex;flex-wrap:wrap;gap:8px;margin-top:16px}
+.tag{background:rgba(255,255,255,.2);border-radius:20px;padding:4px 14px;font-size:13px}
+.section{background:#fff;border-radius:12px;padding:24px;margin-bottom:20px;box-shadow:0 2px 12px rgba(100,100,200,.08)}
+.section h2{font-size:1.1em;font-weight:700;color:#4c63d2;margin-bottom:16px;display:flex;align-items:center;gap:8px}
+.ch{margin-bottom:16px}
+.ch-head{display:flex;align-items:center;gap:10px;font-weight:700;font-size:1em;color:#333;margin-bottom:6px}
+.badge{background:#667eea;color:#fff;border-radius:6px;padding:2px 8px;font-size:12px;font-weight:700;flex-shrink:0}
+ul{list-style:none;padding-left:20px}
+li{padding:3px 0;font-size:.93em;color:#555;display:flex;align-items:baseline;gap:8px}
+.num{color:#a0a8d8;font-size:.82em;min-width:32px;flex-shrink:0}
+.dot{display:inline-block;width:10px;height:10px;border-radius:50%;flex-shrink:0;margin-top:4px}
+small{color:#aaa;font-size:.85em}
+.footer{text-align:center;color:#bbb;font-size:12px;margin-top:32px;padding-top:16px;border-top:1px solid #eee}
+${coverData?.intro||coverData?.prompt?`.prompt{background:#f8f8fe;border:1px solid #e0e7ff;border-radius:8px;padding:16px;font-size:13px;color:#555;white-space:pre-wrap;line-height:1.7}`:''}
+</style></head><body>
+<div class="wrap">
+  <div class="hero">
+    <h1>${title}</h1>
+    ${titleData?.sub?`<p class="sub">${titleData.sub}</p>`:''}
+    <div class="meta">
+      ${coverData?.author?`<span class="tag">✍️ ${coverData.author}</span>`:''}
+      ${styleData?.cat?`<span class="tag">📚 ${styleData.cat}</span>`:''}
+      ${sname?`<span class="tag">🖊️ ${sname}</span>`:''}
+      <span class="tag">📋 ${(toc||[]).length}챕터</span>
+    </div>
+  </div>
+  ${tocRows?`<div class="section"><h2>📋 목차</h2>${tocRows}</div>`:''}
+  ${mmRows?`<div class="section"><h2>🗺️ 마인드맵 <small style="font-weight:400;color:#aaa;font-size:.85em">중심: ${mindMap?.text}</small></h2><ul>${mmRows}</ul></div>`:''}
+  ${coverData?.intro?`<div class="section"><h2>💬 표지 소개글</h2><p style="color:#555;white-space:pre-line">${coverData.intro}</p></div>`:''}
+  ${coverData?.prompt?`<div class="section"><h2>🖼️ AI 이미지 프롬프트</h2><p class="prompt">${coverData.prompt}</p></div>`:''}
+  <p class="footer">📚 전자책 초안 작성 앱으로 생성됨</p>
+</div>
+</body></html>`;
+};
+
+let _nid = 1;
+const mkNode = (text,level=0,parentId=null,colorIdx=0) => ({
+  id:`n${_nid++}`, text, level, parentId, children:[],
+  color: level===0 ? LEVEL_COLORS[0] : (LEVEL_COLORS[Math.min(level,2)] instanceof Array ? LEVEL_COLORS[Math.min(level,2)][colorIdx%8] : LEVEL_COLORS[0])
+});
+
+// ── 브레인스토밍 ──────────────────────────────────────
+const BS_SECTIONS = [
+  {
+    num:'①', id:'good', icon:'🏆', color:'#4f46e5',
+    title:'내가 잘하는 것',
+    hint:'남에게 칭찬 받은 경험, 사람들이 자신에게 자주 물어보는 질문의 주제, 직장 등 어떤 일을 했던 경험, 어떤 어려움을 극복하여 성공했던 경험',
+    ph:'예) 엑셀 정리를 잘 한다는 말을 자주 들었다\n예) 친구들이 다이어트 방법을 자주 물어본다\n예) 10년간 영업직으로 일했다...',
+  },
+  {
+    num:'②', id:'like', icon:'❤️', color:'#dc2626',
+    title:'내가 좋아하는 것',
+    hint:'쉬는 시간에 주로 하는 활동, 어떤 활동으로 행복함을 느꼈던가',
+    ph:'예) 주말엔 항상 요리 영상을 찾아본다\n예) 여행 계획 세우는 것 자체가 즐겁다\n예) 독서 후 메모 정리할 때 가장 설레인다...',
+  },
+  {
+    num:'③', id:'interest', icon:'🔍', color:'#0284c7',
+    title:'내가 관심있는 것',
+    hint:'지금 당장 배우고 싶은 것, 지금 가장 관심을 가지는 분야는 어떤 것일까?',
+    ph:'예) 요즘 부업과 재테크에 관심이 많다\n예) AI 툴 활용법을 제대로 배우고 싶다\n예) 건강한 식습관에 대해 계속 찾아보게 된다...',
+  },
+];
+
+function BrainStormStep({data, onChange, onExtract}) {
+  const [vals, setVals] = useState(data?.vals || {good:'', like:'', interest:''});
+  const [topics, setTopics] = useState(data?.topics || []);
+  const [selTopics, setSelTopics] = useState(data?.selTopics || []);
+  const [loading, setLoading] = useState(false);
+  const [extracted, setExtracted] = useState(data?.topics?.length > 0);
+
+  useEffect(()=>onChange({vals, topics, selTopics}), [vals, topics, selTopics]);
+
+  const set = (id, v) => setVals(p=>({...p,[id]:v}));
+  const filled = Object.values(vals).some(v=>v.trim().length > 0);
+
+  const extract = () => {
+    setLoading(true);
+    setTimeout(()=>{
+      // 입력값에서 키워드 추출 (실제 AI 연동 시 Claude API 호출 위치)
+      const all = Object.values(vals).join(' ');
+      const keywords = [];
+      // 직업/경험 관련
+      if(/영업|마케팅|기획|디자인|개발|코딩|회계|세무|법률|의료|교육|강의|글쓰기|번역/.test(all)) keywords.push('직무 전문성 노하우');
+      if(/다이어트|운동|헬스|요가|건강|식단|체중/.test(all)) keywords.push('건강 & 다이어트');
+      if(/재테크|투자|주식|부동산|저축|돈|수익/.test(all)) keywords.push('재테크 & 투자');
+      if(/여행|해외|국내여행|여행기|숙소|항공/.test(all)) keywords.push('여행 가이드');
+      if(/요리|레시피|음식|먹방|쿠킹|식재료/.test(all)) keywords.push('요리 & 레시피');
+      if(/육아|아이|자녀|교육|공부|학습|엄마|아빠/.test(all)) keywords.push('육아 & 자녀교육');
+      if(/AI|ChatGPT|디지털|자동화|업무효율|도구|앱/.test(all)) keywords.push('AI & 디지털 도구 활용');
+      if(/부업|N잡|프리랜서|부수입|온라인수익|블로그|유튜브/.test(all)) keywords.push('부업 & 수익화');
+      if(/글쓰기|책|독서|콘텐츠|작가|블로그/.test(all)) keywords.push('글쓰기 & 콘텐츠 제작');
+      if(/심리|감정|힐링|멘탈|스트레스|마음|자존감/.test(all)) keywords.push('심리 & 자기이해');
+      if(/패션|뷰티|코디|스킨케어|메이크업/.test(all)) keywords.push('패션 & 뷰티');
+      if(/공부|시험|자격증|취업|이직|커리어/.test(all)) keywords.push('커리어 & 자기계발');
+
+      // 기본 추천 (키워드 없을 때)
+      if (keywords.length < 3) {
+        const defaults = ['나만의 경험담','생활 속 꿀팁 모음','초보자를 위한 입문 가이드','○○로 인생 바꾼 이야기'];
+        defaults.forEach(d=>{ if(!keywords.includes(d)) keywords.push(d); });
+      }
+
+      // 직접 언급된 단어 추출
+      const words = all.match(/[가-힣]{2,6}/g) || [];
+      const freq = {};
+      words.forEach(w=>{ if(w.length>=2) freq[w]=(freq[w]||0)+1; });
+      const topWords = Object.entries(freq).sort((a,b)=>b[1]-a[1]).slice(0,5).map(([w])=>w+'에 대한 이야기');
+
+      const result = [...new Set([...keywords, ...topWords])].slice(0, 10);
+      setTopics(result);
+      setExtracted(true);
+      setLoading(false);
+    }, 1000);
+  };
+
+  const toggleTopic = t => {
+    setSelTopics(prev => prev.includes(t) ? prev.filter(x=>x!==t) : [...prev, t]);
+  };
+
+  return html`<div class="space-y-4">
+    <!-- 헤더 -->
+    <div class="card" style="background:linear-gradient(135deg,#f0f4ff,#faf5ff);border:1px solid #e0e7ff">
+      <div class="flex items-start justify-between">
+        <div>
+          <div class="flex items-center gap-3 mb-1">
+            <span class="text-3xl">💡</span>
+            <h2 class="text-2xl font-black text-gray-800">아이디어 브레인스토밍</h2>
+          </div>
+          <p class="text-base font-semibold text-indigo-600 ml-12">나만의 책 주제 찾기</p>
+          <p class="text-sm text-gray-500 mt-2 ml-12">솔직하게 생각나는 대로 적어보세요. 정답은 없습니다 😊</p>
+        </div>
+        <div class="w-14 h-14 bg-blue-500 rounded-full flex items-center justify-center flex-shrink-0 shadow-lg">
+          <span class="text-white text-2xl">🔍</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- 3가지 섹션 -->
+    <div class="space-y-4">
+      ${BS_SECTIONS.map(sec=>html`
+        <div key=${sec.id} class="card" style=${{borderLeft:`4px solid ${sec.color}`}}>
+          <div class="flex items-center gap-2 mb-1">
+            <span class="text-xl font-black" style=${{color:sec.color}}>${sec.num}</span>
+            <span class="text-lg">${sec.icon}</span>
+            <h3 class="text-lg font-bold text-gray-800">${sec.title}</h3>
+          </div>
+          <p class="text-sm text-gray-500 mb-3 pl-8 leading-relaxed">${sec.hint}</p>
+          <textarea
+            value=${vals[sec.id]}
+            onInput=${e=>set(sec.id, e.target.value)}
+            class="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm text-gray-700 resize-none"
+            style="min-height:90px;line-height:1.8"
+            placeholder=${sec.ph}
+          ></textarea>
+          <!-- 글자 힌트 태그 -->
+          <div class="mt-2 flex flex-wrap gap-1">
+            ${(sec.id==='good'
+              ? ['칭찬받은 경험','자주 받는 질문','직장 경험','극복 스토리','특기']
+              : sec.id==='like'
+              ? ['취미 활동','주말에 하는 것','행복한 순간','빠져드는 것','설레는 것']
+              : ['배우고 싶은 것','자주 검색하는 것','관심 분야','요즘 꽂힌 것','미래 목표']
+            ).map(tag=>html`
+              <span key=${tag}
+                class="tag bg-gray-100 text-gray-500 hover:bg-indigo-100 hover:text-indigo-600 text-xs"
+                style="font-size:11px"
+                onClick=${()=>set(sec.id, vals[sec.id]+(vals[sec.id]?'\n':'')+tag+': ')}>
+                +${tag}
+              </span>
+            `)}
+          </div>
+        </div>
+      `)}
+    </div>
+
+    <!-- 주제 추출 버튼 -->
+    <div class="card text-center">
+      <button onClick=${extract} disabled=${!filled||loading}
+        class="g-btn px-8 py-3 rounded-xl font-bold text-base disabled:opacity-40 transition shadow-md">
+        ${loading ? '🤖 AI가 책 주제를 분석하는 중...' : '✨ 나에게 맞는 책 주제 추출하기'}
+      </button>
+      ${!filled?html`<p class="text-xs text-gray-400 mt-2">위 세 가지 중 하나 이상 작성하면 활성화됩니다</p>`:''}
+    </div>
+
+    <!-- 추출된 주제 -->
+    ${extracted&&topics.length>0?html`
+      <div class="card">
+        <div class="flex items-center gap-2 mb-3">
+          <span class="text-xl">🎯</span>
+          <h3 class="font-bold text-gray-800">추천 책 주제 ${topics.length}개</h3>
+          <span class="text-xs text-gray-400 ml-auto">클릭해서 마인드맵에 사용할 주제를 선택하세요</span>
+        </div>
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 mb-4">
+          ${topics.map((t,i)=>html`
+            <div key=${i}
+              onClick=${()=>toggleTopic(t)}
+              class=${'flex items-center gap-3 px-4 py-3 rounded-xl cursor-pointer transition border-2 '+(selTopics.includes(t)?'border-indigo-400 bg-indigo-50':'border-gray-100 bg-gray-50 hover:border-indigo-200 hover:bg-indigo-50/50')}>
+              <span class="text-lg flex-shrink-0">${selTopics.includes(t)?'✅':'⭕'}</span>
+              <span class=${'text-sm font-medium '+(selTopics.includes(t)?'text-indigo-700':'text-gray-700')}>${t}</span>
+            </div>
+          `)}
+        </div>
+        ${selTopics.length>0?html`
+          <div class="bg-indigo-50 rounded-xl p-3 flex items-center justify-between">
+            <div>
+              <p class="text-sm font-semibold text-indigo-700">${selTopics.length}개 주제 선택됨</p>
+              <p class="text-xs text-indigo-500 mt-0.5">다음 단계(마인드맵)에서 선택한 주제를 바탕으로 시작합니다</p>
+            </div>
+            <div class="flex flex-wrap gap-1 max-w-xs">
+              ${selTopics.map(t=>html`<span key=${t} class="text-xs bg-indigo-200 text-indigo-800 px-2 py-1 rounded-full">${t}</span>`)}
+            </div>
+          </div>
+        `:''}
+      </div>
+    `:''}
+  </div>`;
+}
+
+// ── 마인드맵 ───────────────────────────────────────────
+function MindMapStep({data, onChange, suggestedTopics=[]}) {
+  const [root, setRoot] = useState(data || {id:'n0',text:suggestedTopics[0]||'나의 주제',level:0,children:[],color:'#FFD93D'});
+  const [selId, setSelId] = useState(null);
+  const [editTxt, setEditTxt] = useState('');
+  const [addTxt, setAddTxt] = useState('');
+  const [view, setView] = useState('map');
+
+  const update = r => { setRoot(r); onChange(r); };
+
+  const findNode = (node, id) => {
+    if (node.id===id) return node;
+    for (const c of node.children) { const f=findNode(c,id); if(f) return f; }
+    return null;
+  };
+  const updateNode = (node, id, fn) => node.id===id ? fn(node) : {...node, children:node.children.map(c=>updateNode(c,id,fn))};
+  const deleteNode = (node, id) => ({...node, children:node.children.filter(c=>c.id!==id).map(c=>deleteNode(c,id))});
+
+  const selNode = selId ? findNode(root, selId) : null;
+
+  // Layout
+  const SVW=800, SVH=520;
+  const pos = {};
+  const cx=SVW/2, cy=SVH/2;
+  pos[root.id]={x:cx,y:cy};
+  const L1=root.children;
+  const R1=Math.min(170,Math.max(120,110+L1.length*8));
+  L1.forEach((n1,i)=>{
+    const a=(2*Math.PI*i/Math.max(L1.length,1))-Math.PI/2;
+    pos[n1.id]={x:cx+R1*Math.cos(a),y:cy+R1*Math.sin(a),a};
+    const L2=n1.children;
+    L2.forEach((n2,j)=>{
+      const sp=Math.PI*.75, a2=L2.length===1?a:a-sp/2+sp*j/(L2.length-1);
+      pos[n2.id]={x:pos[n1.id].x+105*Math.cos(a2),y:pos[n1.id].y+105*Math.sin(a2),a:a2};
+      n2.children.forEach((n3,k)=>{
+        const sp3=Math.PI*.5, a3=n2.children.length===1?a2:a2-sp3/2+sp3*k/(n2.children.length-1);
+        pos[n3.id]={x:pos[n2.id].x+70*Math.cos(a3),y:pos[n2.id].y+70*Math.sin(a3)};
+      });
+    });
+  });
+
+  const radii={0:46,1:32,2:22,3:16};
+  const fsizes={0:12,1:11,2:9,3:8};
+
+  const Links = ({node}) => node.children.map(c => {
+    const p=pos[node.id], q=pos[c.id];
+    if(!p||!q) return null;
+    return html`<g key=${'lk'+node.id+c.id}>
+      <line x1=${p.x} y1=${p.y} x2=${q.x} y2=${q.y} stroke="#ccc" strokeWidth=${c.level===1?2:1.5} strokeDasharray=${c.level>1?'4,3':'none'}/>
+      <${Links} node=${c}/>
+    </g>`;
+  });
+
+  const Nodes = ({node}) => {
+    const p=pos[node.id]; if(!p) return null;
+    const r=radii[node.level]||14, fs=fsizes[node.level]||8;
+    const mx=node.level===0?6:node.level===1?5:4;
+    const lines=[]; for(let i=0;i<node.text.length;i+=mx) lines.push(node.text.slice(i,i+mx));
+    return html`<g key=${node.id}>
+      <g class="node-g" onClick=${()=>{setSelId(node.id);setEditTxt(node.text);}}>
+        <circle cx=${p.x} cy=${p.y} r=${r} fill=${node.color} stroke=${selId===node.id?'#4c63d2':'rgba(0,0,0,.1)'} strokeWidth=${selId===node.id?3:1.5}/>
+        ${lines.map((ln,li)=>html`<text key=${li} x=${p.x} y=${p.y+(li-(lines.length-1)/2)*fs*1.3} textAnchor="middle" dominantBaseline="middle" fontSize=${fs} fontWeight=${node.level===0?700:500} fill=${node.level===0?'#333':'#222'}>${ln}</text>`)}
+      </g>
+      ${node.children.map(c=>html`<${Nodes} key=${c.id} node=${c}/>`)}
+    </g>`;
+  };
+
+  const flat=[]; const flatten=(n,d=0)=>{flat.push({...n,d});n.children.forEach(c=>flatten(c,d+1));};
+  flatten(root);
+
+  const addToParent = (parentId) => {
+    if(!addTxt.trim()) return;
+    const par=findNode(root,parentId);
+    if(!par) return;
+    const lvl=par.level+1;
+    const ci=par.children.length;
+    const child={...mkNode(addTxt.trim(),lvl,parentId,ci), color:(LEVEL_COLORS[Math.min(lvl,2)] instanceof Array?LEVEL_COLORS[Math.min(lvl,2)][ci%8]:LEVEL_COLORS[0])};
+    update(updateNode(root,parentId,n=>({...n,children:[...n.children,child]})));
+    setAddTxt('');
+  };
+
+  const QUICK=['경험담','노하우','실수사례','핵심팁','도구·툴','FAQ','성공사례','주의사항'];
+
+  return html`<div class="space-y-4">
+    ${suggestedTopics.length>0?html`
+      <div class="card" style="background:linear-gradient(135deg,#f0fdf4,#ecfdf5);border:1px solid #bbf7d0">
+        <div class="flex items-center gap-2 mb-2">
+          <span class="text-lg">💡</span>
+          <p class="text-sm font-bold text-green-700">브레인스토밍에서 추천된 주제</p>
+          <span class="text-xs text-green-500 ml-auto">클릭하면 중심 주제로 설정</span>
+        </div>
+        <div class="flex flex-wrap gap-2">
+          ${suggestedTopics.map((t,i)=>html`
+            <button key=${i}
+              onClick=${()=>update({...root, text:t})}
+              class=${'px-3 py-1.5 rounded-full text-sm font-medium border-2 transition '+(root.text===t?'border-green-500 bg-green-500 text-white':'border-green-300 bg-white text-green-700 hover:bg-green-50')}>
+              ${root.text===t?'✓ ':''} ${t}
+            </button>
+          `)}
+        </div>
+      </div>
+    `:''}
+    <div class="card">
+      <div class="flex items-center justify-between mb-3">
+        <div>
+          <h2 class="text-xl font-bold text-gray-800">마인드맵으로 아이디어 정리</h2>
+          <p class="text-sm text-gray-400 mt-0.5">중심 주제 아래 소주제를 추가해 목차의 뼈대를 만드세요</p>
+        </div>
+        <div class="flex gap-2">
+          <button onClick=${()=>setView('map')} class=${'px-3 py-1.5 rounded-lg text-sm font-medium transition '+(view==='map'?'bg-indigo-500 text-white':'bg-gray-100 text-gray-600 hover:bg-gray-200')}>🗺️ 맵</button>
+          <button onClick=${()=>setView('list')} class=${'px-3 py-1.5 rounded-lg text-sm font-medium transition '+(view==='list'?'bg-indigo-500 text-white':'bg-gray-100 text-gray-600 hover:bg-gray-200')}>📋 목록</button>
+        </div>
+      </div>
+
+      <div class="flex items-center gap-3 p-3 bg-yellow-50 rounded-xl border border-yellow-200 mb-3">
+        <span class="text-2xl">⭐</span>
+        <div class="flex-1">
+          <p class="text-xs font-semibold text-yellow-700 mb-0.5">중심 주제</p>
+          <input value=${root.text} onInput=${e=>update({...root,text:e.target.value})}
+            class="w-full bg-transparent text-lg font-bold text-gray-800 border-b-2 border-yellow-300 pb-1"
+            placeholder="예: 재테크 입문, 다이어트 성공법, 여행 이야기..." />
+        </div>
+      </div>
+
+      ${view==='map' ? html`
+        <div class="rounded-xl overflow-hidden bg-gradient-to-br from-slate-50 to-indigo-50 border border-indigo-100 relative">
+          <svg viewBox=${'0 0 '+SVW+' '+SVH} style="width:100%;min-height:380px">
+            <${Links} node=${root}/>
+            <${Nodes} node=${root}/>
+          </svg>
+          <div class="absolute bottom-2 right-3 text-xs text-gray-400 bg-white/80 px-2 py-1 rounded">노드 클릭 → 편집</div>
+        </div>
+      ` : html`
+        <div class="space-y-0.5 max-h-80 overflow-y-auto">
+          ${flat.map(n=>html`
+            <div key=${n.id} class=${'flex items-center gap-2 py-2 px-3 rounded-lg cursor-pointer toc-row '+(selId===n.id?'bg-indigo-50':'')}
+              style=${{paddingLeft:(n.d*22+12)+'px'}}
+              onClick=${()=>{setSelId(n.id);setEditTxt(n.text);}}>
+              <div class="w-3 h-3 rounded-full flex-shrink-0" style=${{background:n.color}}></div>
+              <span class=${'text-sm '+(n.level===0?'font-bold text-gray-800':n.level===1?'font-semibold text-gray-700':'text-gray-600')}>${n.text}</span>
+              <span class="text-xs text-gray-300 ml-auto">Lv${n.level}</span>
+            </div>
+          `)}
+        </div>
+      `}
+    </div>
+
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+      <div class="card">
+        <h3 class="font-bold text-gray-700 mb-3">➕ 소주제 추가</h3>
+        <input value=${addTxt} onInput=${e=>setAddTxt(e.target.value)}
+          onKeyDown=${e=>{if(e.key==='Enter') selId && selId!==root.id ? addToParent(selId) : addToParent(root.id);}}
+          class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm mb-2"
+          placeholder="추가할 주제 입력 후 Enter..." />
+        ${selNode && selId!==root.id ? html`
+          <div class="space-y-2">
+            <p class="text-xs text-gray-400">선택: <strong class="text-gray-700">${selNode.text}</strong></p>
+            <div class="flex gap-2">
+              <button onClick=${()=>addToParent(selId)} class="flex-1 bg-indigo-500 text-white rounded-lg py-2 text-sm font-medium hover:bg-indigo-600">하위에 추가</button>
+              <button onClick=${()=>addToParent(selNode.parentId||root.id)} class="flex-1 bg-green-500 text-white rounded-lg py-2 text-sm font-medium hover:bg-green-600">같은 레벨</button>
+            </div>
+          </div>
+        ` : html`
+          <button onClick=${()=>addToParent(root.id)} class="w-full bg-indigo-500 text-white rounded-lg py-2 text-sm font-medium hover:bg-indigo-600">
+            중심주제에 소주제 추가
+          </button>
+        `}
+        <div class="mt-3">
+          <p class="text-xs text-gray-400 mb-1">💡 빠른 태그</p>
+          ${QUICK.map(t=>html`<span key=${t} class="tag bg-gray-100 text-gray-600 hover:bg-indigo-100 hover:text-indigo-700" onClick=${()=>setAddTxt(t)}>#${t}</span>`)}
+        </div>
+      </div>
+
+      <div class="card">
+        <h3 class="font-bold text-gray-700 mb-3">✏️ 선택 노드 편집</h3>
+        ${selId ? html`
+          <div class="space-y-3">
+            <div class="p-2 bg-indigo-50 rounded-lg text-sm text-indigo-700 font-medium">${selNode?.text}</div>
+            <input value=${editTxt} onInput=${e=>setEditTxt(e.target.value)}
+              onKeyDown=${e=>{if(e.key==='Enter'){update(updateNode(root,selId,n=>({...n,text:editTxt.trim()})));setSelId(null);}}}
+              class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm"
+              placeholder="새 이름 입력 후 Enter..." />
+            <div class="flex gap-2">
+              <button onClick=${()=>{update(updateNode(root,selId,n=>({...n,text:editTxt.trim()})));setSelId(null);}} class="flex-1 bg-blue-500 text-white rounded-lg py-2 text-sm font-medium hover:bg-blue-600">수정</button>
+              ${selId!==root.id?html`<button onClick=${()=>{update(deleteNode(root,selId));setSelId(null);}} class="flex-1 bg-red-400 text-white rounded-lg py-2 text-sm font-medium hover:bg-red-500">삭제</button>`:''}
+              <button onClick=${()=>setSelId(null)} class="px-3 py-2 bg-gray-100 text-gray-600 rounded-lg text-sm hover:bg-gray-200">취소</button>
+            </div>
+          </div>
+        ` : html`
+          <div class="text-center py-6 text-gray-400">
+            <p class="text-3xl mb-2">👆</p>
+            <p class="text-sm">맵에서 노드를 클릭하면<br/>편집 옵션이 나타납니다</p>
+          </div>
+        `}
+        <div class="mt-4 pt-3 border-t border-gray-100 grid grid-cols-3 gap-2 text-center">
+          <div><p class="text-xl font-bold text-indigo-500">${root.children.length}</p><p class="text-xs text-gray-400">소주제</p></div>
+          <div><p class="text-xl font-bold text-green-500">${root.children.reduce((a,n)=>a+n.children.length,0)}</p><p class="text-xs text-gray-400">세부주제</p></div>
+          <div><p class="text-xl font-bold text-purple-500">${flat.length-1}</p><p class="text-xs text-gray-400">전체</p></div>
+        </div>
+      </div>
+    </div>
+  </div>`;
+}
+
+// ── 목차 ───────────────────────────────────────────────
+function TOCStep({mindMap, data, onChange}) {
+  const build = () => {
+    if(!mindMap||!mindMap.children.length) return [];
+    return mindMap.children.map((l1,i)=>({
+      id:l1.id, num:i+1, title:l1.text, intro:'',
+      sections:l1.children.map((l2,j)=>({id:l2.id,num:j+1,title:l2.text,
+        subs:l2.children.map((l3,k)=>({id:l3.id,num:k+1,title:l3.text}))}))
+    }));
+  };
+  const [toc,setTOC]=useState(data?.length?data:build());
+  const [editing,setEditing]=useState(null);
+  const [ev,setEv]=useState('');
+
+  useEffect(()=>onChange(toc),[toc]);
+
+  const move=(i,d)=>{ const t=[...toc]; const j=i+d; if(j<0||j>=t.length)return; [t[i],t[j]]=[t[j],t[i]]; setTOC(t.map((ch,idx)=>({...ch,num:idx+1}))); };
+  const setT=(path,v)=>{ const t=JSON.parse(JSON.stringify(toc)); if(path.length===1)t[path[0]].title=v; else if(path.length===2)t[path[0]].sections[path[1]].title=v; else t[path[0]].sections[path[1]].subs[path[2]].title=v; setTOC(t); };
+  const addSec=(ci)=>{ const t=JSON.parse(JSON.stringify(toc)); t[ci].sections.push({id:'s'+Date.now(),num:t[ci].sections.length+1,title:'새 절',subs:[]}); setTOC(t); };
+  const addCh=()=>setTOC([...toc,{id:'c'+Date.now(),num:toc.length+1,title:'새 챕터',intro:'',sections:[]}]);
+  const rmCh=(i)=>setTOC(toc.filter((_,idx)=>idx!==i).map((ch,idx)=>({...ch,num:idx+1})));
+  const rmSec=(ci,si)=>{ const t=JSON.parse(JSON.stringify(toc)); t[ci].sections=t[ci].sections.filter((_,idx)=>idx!==si); setTOC(t); };
+
+  return html`<div class="space-y-4">
+    <div class="card">
+      <div class="flex items-center justify-between mb-4">
+        <div>
+          <h2 class="text-xl font-bold text-gray-800">목차 구성하기</h2>
+          <p class="text-sm text-gray-400 mt-0.5">마인드맵 기반 자동 생성 · 순서/제목 편집 가능</p>
+        </div>
+        <button onClick=${addCh} class="g-btn px-4 py-2 rounded-xl text-sm font-medium">+ 챕터 추가</button>
+      </div>
+
+      ${toc.length===0?html`
+        <div class="text-center py-12 text-gray-400">
+          <p class="text-4xl mb-3">📭</p>
+          <p>마인드맵에서 소주제를 추가하면 목차가 자동 생성됩니다</p>
+        </div>
+      `:html`
+        <div class="space-y-3">
+          ${toc.map((ch,ci)=>html`
+            <div key=${ch.id} class="border border-indigo-100 rounded-xl overflow-hidden">
+              <div class="bg-gradient-to-r from-indigo-50 to-purple-50 px-4 py-3 flex items-center gap-3">
+                <span class="w-8 h-8 bg-indigo-500 text-white rounded-lg flex items-center justify-center text-sm font-bold flex-shrink-0">${ci+1}</span>
+                ${editing===`ch${ci}`?html`
+                  <input value=${ev} onInput=${e=>setEv(e.target.value)}
+                    onBlur=${()=>{setT([ci],ev);setEditing(null);}}
+                    onKeyDown=${e=>{if(e.key==='Enter'){setT([ci],ev);setEditing(null);}}}
+                    class="flex-1 font-bold text-gray-800 bg-white border border-indigo-300 rounded-lg px-2 py-1 text-sm" autofocus/>
+                `:html`
+                  <span class="flex-1 font-bold text-gray-800 cursor-pointer hover:text-indigo-600" onClick=${()=>{setEditing(`ch${ci}`);setEv(ch.title);}}>${ch.title}</span>
+                `}
+                <div class="flex items-center gap-1">
+                  <button onClick=${()=>move(ci,-1)} disabled=${ci===0} class="p-1 text-gray-400 hover:text-gray-700 disabled:opacity-20">▲</button>
+                  <button onClick=${()=>move(ci,1)} disabled=${ci===toc.length-1} class="p-1 text-gray-400 hover:text-gray-700 disabled:opacity-20">▼</button>
+                  <button onClick=${()=>rmCh(ci)} class="p-1 text-red-400 hover:text-red-600 ml-1 text-sm">✕</button>
+                </div>
+              </div>
+              <div class="p-3 space-y-1">
+                ${ch.sections.map((sec,si)=>html`
+                  <div key=${sec.id} class="toc-row flex items-center gap-3 px-3 py-2">
+                    <span class="text-xs text-gray-400 font-mono w-9 flex-shrink-0">${ci+1}-${si+1}</span>
+                    ${editing===`s${ci}-${si}`?html`
+                      <input value=${ev} onInput=${e=>setEv(e.target.value)}
+                        onBlur=${()=>{setT([ci,si],ev);setEditing(null);}}
+                        onKeyDown=${e=>{if(e.key==='Enter'){setT([ci,si],ev);setEditing(null);}}}
+                        class="flex-1 text-sm text-gray-700 bg-white border border-indigo-300 rounded px-2 py-1" autofocus/>
+                    `:html`
+                      <span class="flex-1 text-sm text-gray-700 cursor-pointer hover:text-indigo-600" onClick=${()=>{setEditing(`s${ci}-${si}`);setEv(sec.title);}}>${sec.title}</span>
+                    `}
+                    <button onClick=${()=>rmSec(ci,si)} class="text-red-300 hover:text-red-500 text-xs flex-shrink-0">✕</button>
+                  </div>
+                `)}
+                <button onClick=${()=>addSec(ci)} class="text-xs text-indigo-400 hover:text-indigo-600 hover:underline ml-12 py-1">+ 절 추가</button>
+              </div>
+            </div>
+          `)}
+        </div>
+      `}
+    </div>
+
+    <div class="card">
+      <h3 class="font-bold text-gray-700 mb-3">📖 목차 미리보기</h3>
+      <div class="bg-gray-50 rounded-xl p-4 text-sm space-y-2 max-h-56 overflow-y-auto">
+        ${toc.map((ch,ci)=>html`
+          <div key=${ch.id}>
+            <p class="font-bold text-gray-800">제${ci+1}장. ${ch.title}</p>
+            ${ch.sections.map((s,si)=>html`<p key=${s.id} class="text-gray-600 pl-4 text-xs">${ci+1}.${si+1} ${s.title}</p>`)}
+          </div>
+        `)}
+      </div>
+    </div>
+  </div>`;
+}
+
+// ── 문체 ───────────────────────────────────────────────
+// 문체별 제목 변환 함수
+const transformTitle = (orig, styleId, idx) => {
+  const t = orig.replace(/하는\s*법$|방법$|기초$|개요$|입문$/,'').trim() || orig;
+  const map = {
+    casual: [
+      `${t}, 사실 이렇게 하면 쉬워요`,
+      `솔직하게 알려주는 ${t} 이야기`,
+      `${t}? 저도 처음엔 몰랐어요`,
+      `누구나 쉽게 하는 ${t}`,
+      `${t} 어렵지 않아요, 같이 해봐요`,
+    ],
+    narrative: [
+      `${t}을 처음 시작한 날`,
+      `${t}이 내 삶을 바꾼 순간`,
+      `아무도 말해주지 않은 ${t}의 진실`,
+      `내가 ${t}을 선택한 이유`,
+      `${t}에 관한 솔직한 이야기`,
+    ],
+    howto: [
+      `[실전] ${t} 완벽 가이드`,
+      `${t} 마스터하기 — 핵심 로드맵`,
+      `실수 없이 ${t} 하는 법`,
+      `${t}을 위한 단계별 체크리스트`,
+      `${t} 핵심 공식 정리`,
+    ],
+    inspir: [
+      `${t}으로 인생을 바꿀 수 있다`,
+      `지금 당장 ${t}을 시작해야 하는 이유`,
+      `당신도 할 수 있는 ${t}`,
+      `${t}, 오늘이 바로 그날입니다`,
+      `${t}의 힘을 믿으세요`,
+    ],
+    formal: [
+      `${t}의 이론적 배경과 적용`,
+      `${t}에 관한 체계적 고찰`,
+      `${t}의 원리와 실제`,
+      `${t}에 대한 심층적 이해`,
+      `${t}의 개념 및 방법론 분석`,
+    ],
+    journal: [
+      `${t}에 대해 생각하는 날`,
+      `${t}을 돌아보며`,
+      `${t}이라는 여정에서 배운 것`,
+      `${t}에 관한 솔직한 고백`,
+      `${t}이 내게 가르쳐 준 것들`,
+    ],
+  };
+  const list = map[styleId] || [`${orig}`];
+  return list[idx % list.length];
+};
+
+function StyleStep({data, onChange, toc=[]}) {
+  const [cat,setCat]         = useState(data?.cat||'');
+  const [style,setStyle]     = useState(data?.style||'');
+  const [note,setNote]       = useState(data?.note||'');
+  const [img,setImg]         = useState(data?.img||null);
+  const [imgAnalyzing,setImgAnalyzing] = useState(false);
+  const [imgDetected,setImgDetected]   = useState(data?.imgDetected||'');
+  const [suggested,setSuggested]       = useState(false);
+  // 목차 제목 변환 관련
+  const [rewriting,setRewriting]       = useState(false);
+  const [rewrittenTOC,setRewrittenTOC] = useState(data?.rewrittenTOC||null);
+  const [approved,setApproved]         = useState(data?.approved||false);
+  const fileRef = useRef(null);
+
+  useEffect(()=>onChange({cat,style,note,img,imgDetected,rewrittenTOC,approved}),
+    [cat,style,note,img,imgDetected,rewrittenTOC,approved]);
+
+  const aiSuggest=()=>{
+    const map={'자기계발':'casual','재테크·투자':'howto','심리·힐링':'journal','IT·테크':'howto','경제·경영':'formal','여행·취미':'narrative','요리·살림':'howto','건강·다이어트':'inspir','패션·뷰티':'narrative','글쓰기·창작':'narrative','부업·수익화':'howto','육아·교육':'casual'};
+    setStyle(map[cat]||'casual'); setSuggested(true); setTimeout(()=>setSuggested(false),2500);
+  };
+
+  const handleImgUpload = e => {
+    const f = e.target.files[0]; if(!f) return;
+    const r = new FileReader();
+    r.onload = ev => {
+      setImg(ev.target.result);
+      setImgAnalyzing(true); setImgDetected('');
+      // 이미지 분석 mock (실제 Claude Vision API 연동 위치)
+      setTimeout(()=>{
+        const detected = ['친근하고 가벼운 대화체 스타일','감성적인 에세이·일기체 스타일','단계별 설명이 명확한 실용서 스타일','감동적인 동기부여·자기계발 스타일','전문적이고 격식 있는 비즈니스 스타일','개인 스토리 중심의 내러티브 스타일'];
+        setImgDetected(detected[Math.floor(Math.random()*detected.length)]);
+        setImgAnalyzing(false);
+      }, 1800);
+    };
+    r.readAsDataURL(f);
+  };
+
+  // 개별 제목 편집 상태
+  const [editingId, setEditingId] = useState(null);   // 'ch-0' | 'sec-0-1' | null
+  const [editVal,   setEditVal]   = useState('');
+
+  // rewrittenTOC에서 단일 타이틀 업데이트
+  const updateOneTitle = (ci, si, val) => {
+    setRewrittenTOC(prev => {
+      const t = JSON.parse(JSON.stringify(prev));
+      if (si === -1) t[ci].title = val;
+      else t[ci].sections[si].title = val;
+      return t;
+    });
+    setApproved(false);
+  };
+
+  // 개별 항목 AI 재생성
+  const rewriteOne = (ci, si) => {
+    const orig = si === -1
+      ? (rewrittenTOC[ci].origTitle || rewrittenTOC[ci].title)
+      : (rewrittenTOC[ci].sections[si].origTitle || rewrittenTOC[ci].sections[si].title);
+    // 다음 variant 인덱스 (현재 번호+1 회전)
+    const curTitle = si === -1 ? rewrittenTOC[ci].title : rewrittenTOC[ci].sections[si].title;
+    const map = {
+      casual:    [`${orig}, 사실 이렇게 하면 쉬워요`,`솔직하게 알려주는 ${orig} 이야기`,`${orig}? 저도 처음엔 몰랐어요`,`누구나 쉽게 하는 ${orig}`,`${orig} 어렵지 않아요, 같이 해봐요`],
+      narrative: [`${orig}을 처음 시작한 날`,`${orig}이 내 삶을 바꾼 순간`,`아무도 말해주지 않은 ${orig}의 진실`,`내가 ${orig}을 선택한 이유`,`${orig}에 관한 솔직한 이야기`],
+      howto:     [`[실전] ${orig} 완벽 가이드`,`${orig} 마스터하기 — 핵심 로드맵`,`실수 없이 ${orig} 하는 법`,`${orig}을 위한 단계별 체크리스트`,`${orig} 핵심 공식 정리`],
+      inspir:    [`${orig}으로 인생을 바꿀 수 있다`,`지금 당장 ${orig}을 시작해야 하는 이유`,`당신도 할 수 있는 ${orig}`,`${orig}, 오늘이 바로 그날입니다`,`${orig}의 힘을 믿으세요`],
+      formal:    [`${orig}의 이론적 배경과 적용`,`${orig}에 관한 체계적 고찰`,`${orig}의 원리와 실제`,`${orig}에 대한 심층적 이해`,`${orig}의 개념 및 방법론 분석`],
+      journal:   [`${orig}에 대해 생각하는 날`,`${orig}을 돌아보며`,`${orig}이라는 여정에서 배운 것`,`${orig}에 관한 솔직한 고백`,`${orig}이 내게 가르쳐 준 것들`],
+    };
+    const variants = map[style] || [`${orig}`];
+    const curIdx = variants.indexOf(curTitle);
+    const next = variants[(curIdx + 1) % variants.length];
+    updateOneTitle(ci, si, next);
+  };
+
+  const startEdit = (id, val) => { setEditingId(id); setEditVal(val); };
+  const saveEdit  = (ci, si)  => { updateOneTitle(ci, si, editVal.trim()||editVal); setEditingId(null); };
+
+  // 다시 생성할 때마다 다른 변형이 나오도록 offset 추적
+  const rewriteOffset = useRef(0);
+
+  const doRewrite = () => {
+    if(!style||!toc.length) return;
+    setRewriting(true); setApproved(false);
+    // 재생성 시 다음 변형 세트로 이동 (5가지 변형 순환)
+    rewriteOffset.current = (rewriteOffset.current + 1) % 5;
+    const offset = rewriteOffset.current;
+    setTimeout(()=>{
+      let counter = 0;
+      const newTOC = toc.map(ch => {
+        const origCh = ch.origTitle || ch.title;
+        return {
+          ...ch,
+          origTitle: origCh,
+          title: transformTitle(origCh, style, offset + counter++),
+          sections: (ch.sections||[]).map(s => {
+            const origSec = s.origTitle || s.title;
+            return {
+              ...s,
+              origTitle: origSec,
+              title: transformTitle(origSec, style, offset + counter++),
+            };
+          }),
+        };
+      });
+      setRewrittenTOC(newTOC);
+      setRewriting(false);
+    }, 1200);
+  };
+
+  const selStyle = WRITING_STYLES.find(s=>s.id===style);
+  const displayTOC = rewrittenTOC || toc;
+
+  return html`<div class="space-y-4">
+
+    <!-- ① 카테고리 + 문체 선택 -->
+    <div class="card">
+      <h2 class="text-xl font-bold text-gray-800 mb-1">문체 & 톤 선택</h2>
+      <p class="text-sm text-gray-400 mb-4">책의 분위기를 결정하는 단계입니다. 선택 후 목차 제목을 해당 문체로 변환할 수 있습니다.</p>
+
+      <div class="mb-4">
+        <p class="text-sm font-semibold text-gray-700 mb-2">📚 카테고리</p>
+        <div class="flex flex-wrap gap-1">
+          ${CATEGORIES.map(c=>html`
+            <button key=${c} onClick=${()=>setCat(c)}
+              class=${'tag text-sm '+(cat===c?'bg-indigo-500 text-white':'bg-gray-100 text-gray-600 hover:bg-indigo-50 hover:text-indigo-600')}>
+              ${c}
+            </button>
+          `)}
+        </div>
+        ${cat?html`
+          <div class="mt-2 flex items-center gap-2 flex-wrap">
+            <span class="text-xs text-green-600">✓ ${cat}</span>
+            <button onClick=${aiSuggest} class="text-xs bg-green-50 text-green-600 border border-green-200 px-3 py-1 rounded-full hover:bg-green-100">🤖 AI 추천</button>
+            ${suggested?html`<span class="text-xs text-indigo-500">✨ 추천 완료!</span>`:''}
+          </div>
+        `:''}
+      </div>
+
+      <div class="mb-4">
+        <p class="text-sm font-semibold text-gray-700 mb-2">✍️ 문체 선택</p>
+        <div class="grid grid-cols-2 lg:grid-cols-3 gap-2">
+          ${WRITING_STYLES.map(s=>html`
+            <div key=${s.id} class=${'scard'+(style===s.id?' on':'')} onClick=${()=>{setStyle(s.id);setRewrittenTOC(null);setApproved(false);}}>
+              <div class="flex items-center gap-1.5 mb-1">
+                <span class="text-xl">${s.icon}</span>
+                <span class="font-semibold text-gray-800 text-xs">${s.name}</span>
+                ${style===s.id?html`<span class="ml-auto text-indigo-500 text-xs">✓</span>`:''}
+              </div>
+              <p class="text-xs text-gray-500 mb-1.5">${s.desc}</p>
+              <p class="text-xs text-gray-400 italic bg-gray-50 rounded p-1.5 leading-relaxed">${s.ex}</p>
+            </div>
+          `)}
+        </div>
+      </div>
+
+      <!-- 참고 이미지 -->
+      <div class="border-2 border-dashed border-gray-200 rounded-xl p-4 mb-3">
+        <div class="flex items-start gap-4">
+          <div class="flex-1">
+            <h4 class="font-semibold text-gray-700 text-sm mb-1">📎 참고 이미지 첨부 (선택)</h4>
+            <p class="text-xs text-gray-400 mb-2">원하는 문체의 책 페이지·글 예시 사진을 첨부하면 AI가 스타일을 분석합니다</p>
+            <button onClick=${()=>fileRef.current?.click()} class="bg-gray-100 text-gray-600 px-3 py-1.5 rounded-lg text-xs hover:bg-gray-200">📁 이미지 업로드</button>
+            <input ref=${fileRef} type="file" accept="image/*" style="display:none" onChange=${handleImgUpload}/>
+          </div>
+          ${img?html`
+            <div class="flex-shrink-0">
+              <div class="relative">
+                <img src=${img} alt="참고" class="w-24 h-24 object-cover rounded-xl border-2 border-gray-200"/>
+                <button onClick=${()=>{setImg(null);setImgDetected('');}} class="absolute -top-2 -right-2 w-5 h-5 bg-red-500 text-white rounded-full text-xs flex items-center justify-center">✕</button>
+              </div>
+              ${imgAnalyzing?html`
+                <div class="mt-2 flex items-center gap-1 text-xs text-indigo-500">
+                  <span class="animate-spin">⏳</span> 분석 중...
+                </div>
+              `:imgDetected?html`
+                <div class="mt-2 bg-indigo-50 border border-indigo-200 rounded-lg px-2 py-1.5" style="max-width:120px">
+                  <p class="text-xs text-indigo-600 font-semibold">감지된 스타일</p>
+                  <p class="text-xs text-indigo-500 leading-tight mt-0.5">${imgDetected}</p>
+                </div>
+              `:''}
+            </div>
+          `:''}
+        </div>
+      </div>
+
+      <div>
+        <p class="text-sm font-semibold text-gray-700 mb-1">💬 추가 요청사항</p>
+        <textarea value=${note} onInput=${e=>setNote(e.target.value)}
+          class="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm text-gray-700 resize-none"
+          rows=${2} placeholder="예: 말투는 친근하되 전문 용어도 자연스럽게. 문장은 짧고 임팩트 있게..."></textarea>
+      </div>
+    </div>
+
+    <!-- ② 목차 제목 문체 변환 -->
+    ${style?html`
+      <div class="card" style="border:2px solid #e0e7ff">
+        <div class="flex items-center justify-between mb-3">
+          <div class="flex items-center gap-2">
+            <span class="text-xl">🔄</span>
+            <div>
+              <h3 class="font-bold text-gray-800">AI 문체 적용 — 목차 제목 변환</h3>
+              <p class="text-xs text-gray-400 mt-0.5">내용은 그대로 두고, 표현법만 선택한 문체 스타일로 바꿔드립니다</p>
+            </div>
+          </div>
+          <div class="flex gap-2">
+            <button onClick=${doRewrite} disabled=${rewriting||!toc.length}
+              class=${'text-xs px-4 py-1.5 rounded-lg font-semibold transition '+(rewriting?'bg-gray-200 text-gray-400':'g-btn')}>
+              ${rewriting?'⏳ 변환 중...':rewrittenTOC?'다시 생성':'✨ 문체 적용하기'}
+            </button>
+          </div>
+        </div>
+
+        ${toc.length===0?html`
+          <div class="text-center py-6 text-gray-400 text-sm bg-gray-50 rounded-xl">
+            <p>목차 구성 단계에서 챕터를 추가하면 여기서 변환할 수 있습니다</p>
+          </div>
+        `:rewrittenTOC?html`
+          <!-- 범례 -->
+          <div class="flex items-center gap-4 mb-2 px-1">
+            <div class="flex items-center gap-1.5">
+              <span class="w-3 h-0.5 bg-gray-300 inline-block" style="text-decoration:line-through"></span>
+              <span class="text-xs text-gray-400">원본</span>
+            </div>
+            <div class="flex items-center gap-1.5">
+              <span class="w-2 h-2 rounded-full bg-indigo-400 inline-block"></span>
+              <span class="text-xs text-gray-500">변환됨</span>
+            </div>
+            <div class="ml-auto flex items-center gap-3">
+              <span class="flex items-center gap-1.5 text-xs font-semibold text-gray-600 bg-white border border-gray-200 px-2.5 py-1 rounded-lg shadow-sm">
+                <span class="text-base">🔁</span> 개별 재생성
+              </span>
+              <span class="flex items-center gap-1.5 text-xs font-semibold text-gray-600 bg-white border border-gray-200 px-2.5 py-1 rounded-lg shadow-sm">
+                <span class="text-base">✏️</span> 직접 수정
+              </span>
+            </div>
+          </div>
+
+          <!-- 변환 결과 비교 (개별 편집 기능 포함) -->
+          <div class="space-y-2 max-h-[480px] overflow-y-auto pr-1">
+            ${rewrittenTOC.map((ch,ci)=>html`
+              <div key=${ch.id} class="bg-gray-50 rounded-xl overflow-hidden border border-gray-100">
+
+                <!-- 챕터 행 -->
+                <div class="px-3 py-2.5 border-b border-gray-100 bg-indigo-50/60">
+                  <div class="flex items-start gap-2">
+                    <span class="text-xs bg-indigo-500 text-white px-1.5 py-0.5 rounded font-bold flex-shrink-0 mt-0.5">
+                      ${ci+1}장
+                    </span>
+                    <div class="flex-1 min-w-0">
+                      <!-- 원본 -->
+                      <p class="text-xs text-gray-400 line-through leading-snug truncate">
+                        ${ch.origTitle||''}
+                      </p>
+                      <!-- 편집 or 표시 -->
+                      ${editingId===`ch-${ci}` ? html`
+                        <div class="flex items-center gap-1.5 mt-1">
+                          <input
+                            value=${editVal}
+                            onInput=${e=>setEditVal(e.target.value)}
+                            onKeyDown=${e=>{
+                              if(e.key==='Enter') saveEdit(ci,-1);
+                              if(e.key==='Escape') setEditingId(null);
+                            }}
+                            class="flex-1 text-sm font-semibold border border-indigo-300 rounded-lg px-2 py-1 bg-white"
+                            autofocus
+                          />
+                          <button onClick=${()=>saveEdit(ci,-1)}
+                            class="text-xs bg-indigo-500 text-white px-2.5 py-1.5 rounded-lg hover:bg-indigo-600 flex-shrink-0">
+                            저장
+                          </button>
+                          <button onClick=${()=>setEditingId(null)}
+                            class="text-xs bg-gray-100 text-gray-500 px-2 py-1.5 rounded-lg hover:bg-gray-200 flex-shrink-0">
+                            취소
+                          </button>
+                        </div>
+                      ` : html`
+                        <div class="flex items-center gap-1.5 mt-0.5">
+                          <p class="text-sm font-semibold text-indigo-700 leading-snug flex-1">→ ${ch.title}</p>
+                          <button
+                            onClick=${()=>rewriteOne(ci,-1)}
+                            title="이 제목만 다시 생성"
+                            class="flex-shrink-0 text-xs px-2 py-1 bg-white border border-gray-200 text-gray-500 rounded-lg hover:bg-indigo-50 hover:border-indigo-300 hover:text-indigo-600 transition">
+                            🔁
+                          </button>
+                          <button
+                            onClick=${()=>startEdit(`ch-${ci}`, ch.title)}
+                            title="직접 수정"
+                            class="flex-shrink-0 text-xs px-2 py-1 bg-white border border-gray-200 text-gray-500 rounded-lg hover:bg-amber-50 hover:border-amber-300 hover:text-amber-600 transition">
+                            ✏️
+                          </button>
+                        </div>
+                      `}
+                    </div>
+                  </div>
+                </div>
+
+                <!-- 절(section) 행들 -->
+                ${ch.sections?.length ? html`
+                  <div class="divide-y divide-gray-100">
+                    ${ch.sections.map((s,si)=>html`
+                      <div key=${s.id} class="flex items-start gap-2 px-3 py-2 hover:bg-gray-100/60 transition">
+                        <span class="text-xs text-gray-400 font-mono flex-shrink-0 mt-1 w-8">${ci+1}-${si+1}</span>
+                        <div class="flex-1 min-w-0">
+                          <p class="text-xs text-gray-400 line-through leading-snug truncate">
+                            ${s.origTitle||''}
+                          </p>
+                          ${editingId===`sec-${ci}-${si}` ? html`
+                            <div class="flex items-center gap-1.5 mt-1">
+                              <input
+                                value=${editVal}
+                                onInput=${e=>setEditVal(e.target.value)}
+                                onKeyDown=${e=>{
+                                  if(e.key==='Enter') saveEdit(ci,si);
+                                  if(e.key==='Escape') setEditingId(null);
+                                }}
+                                class="flex-1 text-xs border border-indigo-300 rounded-lg px-2 py-1 bg-white"
+                                autofocus
+                              />
+                              <button onClick=${()=>saveEdit(ci,si)}
+                                class="text-xs bg-indigo-500 text-white px-2 py-1.5 rounded-lg hover:bg-indigo-600 flex-shrink-0">저장</button>
+                              <button onClick=${()=>setEditingId(null)}
+                                class="text-xs bg-gray-100 text-gray-500 px-2 py-1.5 rounded-lg flex-shrink-0">취소</button>
+                            </div>
+                          ` : html`
+                            <div class="flex items-center gap-1.5 mt-0.5">
+                              <p class="text-xs text-indigo-600 leading-snug flex-1">→ ${s.title}</p>
+                              <button
+                                onClick=${()=>rewriteOne(ci,si)}
+                                title="이 절만 다시 생성"
+                                class="flex-shrink-0 text-xs px-1.5 py-0.5 bg-white border border-gray-200 text-gray-400 rounded hover:bg-indigo-50 hover:border-indigo-300 hover:text-indigo-500 transition">
+                                🔁
+                              </button>
+                              <button
+                                onClick=${()=>startEdit(`sec-${ci}-${si}`, s.title)}
+                                title="직접 수정"
+                                class="flex-shrink-0 text-xs px-1.5 py-0.5 bg-white border border-gray-200 text-gray-400 rounded hover:bg-amber-50 hover:border-amber-300 hover:text-amber-500 transition">
+                                ✏️
+                              </button>
+                            </div>
+                          `}
+                        </div>
+                      </div>
+                    `)}
+                  </div>
+                ` : ''}
+              </div>
+            `)}
+          </div>
+
+          <!-- 승인 버튼 -->
+          <div class="mt-4 pt-3 border-t border-gray-100">
+            ${approved ? html`
+              <div class="flex items-center gap-2 bg-green-50 border border-green-200 rounded-xl px-4 py-3">
+                <span class="text-green-500 text-lg">✅</span>
+                <div>
+                  <p class="text-sm font-bold text-green-700">확정 완료! 이 문체로 진행합니다</p>
+                  <p class="text-xs text-green-500">다음 단계(제목 다듬기)로 넘어가세요</p>
+                </div>
+                <button onClick=${()=>setApproved(false)} class="ml-auto text-xs text-gray-400 hover:text-gray-600">수정하기</button>
+              </div>
+            ` : html`
+              <div class="flex items-center gap-2 flex-wrap">
+                <p class="text-sm text-gray-500 flex-1">변환된 제목이 마음에 드시나요?</p>
+                <button onClick=${()=>setApproved(true)}
+                  class="text-sm px-5 py-2 g-btn rounded-xl font-bold">
+                  ✓ 이 스타일로 확정
+                </button>
+              </div>
+            `}
+          </div>
+        `:html`
+          <!-- 원본 목차 미리보기 -->
+          <div class="bg-gray-50 rounded-xl p-3 max-h-48 overflow-y-auto">
+            <p class="text-xs text-gray-400 mb-2">변환될 목차 (${toc.length}챕터 · ${toc.reduce((a,c)=>a+c.sections.length,0)}절)</p>
+            ${toc.map((ch,ci)=>html`
+              <div key=${ch.id} class="mb-1">
+                <p class="text-sm font-semibold text-gray-700">제${ci+1}장. ${ch.title}</p>
+                ${ch.sections.slice(0,3).map((s,si)=>html`<p key=${s.id} class="text-xs text-gray-500 pl-3">${ci+1}.${si+1} ${s.title}</p>`)}
+                ${ch.sections.length>3?html`<p class="text-xs text-gray-400 pl-3">... 외 ${ch.sections.length-3}개</p>`:''}
+              </div>
+            `)}
+          </div>
+        `}
+      </div>
+
+      <!-- 선택된 문체 요약 -->
+      <div class="card border-l-4 border-indigo-400">
+        <div class="flex items-center gap-3">
+          <span class="text-2xl">${selStyle?.icon}</span>
+          <div>
+            <p class="font-bold text-indigo-700">${selStyle?.name}</p>
+            <p class="text-xs text-gray-500 mt-0.5 italic">"${selStyle?.ex}"</p>
+          </div>
+          ${cat?html`<span class="ml-auto text-xs bg-indigo-100 text-indigo-600 px-2 py-1 rounded-full">${cat}</span>`:''}
+        </div>
+        ${imgDetected?html`
+          <div class="mt-2 pt-2 border-t border-indigo-100 flex items-center gap-2">
+            <span class="text-xs">📎</span>
+            <p class="text-xs text-indigo-500">참고 이미지 분석: <strong>${imgDetected}</strong></p>
+          </div>
+        `:''}
+      </div>
+    `:''}
+  </div>`;
+}
+
+// ── 제목 ───────────────────────────────────────────────
+function TitleStep({mindMap, styleData, toc=[], data, onChange}) {
+  const [kw,setKw]           = useState(data?.kw||mindMap?.text||'');
+  const [sub,setSub]         = useState(data?.sub||'');
+  const [subType,setSubType] = useState(data?.subType||'sentence');
+  const [subList,setSubList] = useState(data?.subList||[]);
+  const [subLoading,setSubLoading] = useState(false);
+  const [list,setList]       = useState(data?.list||[]);
+  const [sel,setSel]         = useState(data?.sel||'');
+  const [final,setFinal]     = useState(data?.final||'');
+  const [loading,setLoading] = useState(false);
+  const [refImg,setRefImg]           = useState(data?.refImg||null);
+  const [refAnalyzing,setRefAnalyzing] = useState(false);
+  const [refDetected,setRefDetected]   = useState(data?.refDetected||'');
+  const fileRef  = useRef(null);
+  const subOffset = useRef(0);
+
+  useEffect(()=>onChange({kw,sub,subType,subList,list,sel,final,refImg,refDetected}),[kw,sub,subType,subList,list,sel,final,refImg,refDetected]);
+
+  const handleRefImg = e => {
+    const f = e.target.files[0]; if(!f) return;
+    const r = new FileReader();
+    r.onload = ev => {
+      setRefImg(ev.target.result);
+      setRefAnalyzing(true); setRefDetected('');
+      setTimeout(()=>{
+        const styles = [
+          '짧고 강렬한 단어형 제목 스타일 (예: "린 스타트업", "아주 작은 습관")',
+          '질문형·호기심 유발 제목 스타일 (예: "왜 나는 항상 실패할까?")',
+          '숫자 포함 리스트형 제목 스타일 (예: "돈의 속성 7가지")',
+          '감성·스토리형 제목 스타일 (예: "어제의 나는 틀렸다")',
+          '직접 지시형 제목 스타일 (예: "그냥 하지 말라", "일단 시작하라")',
+          '혜택 강조형 제목 스타일 (예: "30일 만에 완성하는 ○○")',
+        ];
+        setRefDetected(styles[Math.floor(Math.random()*styles.length)]);
+        setRefAnalyzing(false);
+      }, 1600);
+    };
+    r.readAsDataURL(f);
+  };
+
+  // 문체 확정된 목차에서 키워드 자동 추출
+  const tocKeyword = styleData?.rewrittenTOC?.[0]?.origTitle || mindMap?.text || '';
+
+  const genOffset = useRef(0);
+
+  // 목차에서 핵심 키워드 추출 헬퍼
+  const getTocKws = () => (toc||[]).slice(0,5)
+    .map(ch => (ch.origTitle||ch.title).replace(/^제\d+장\.?\s*/,'').trim())
+    .filter(Boolean);
+
+  const generate = () => {
+    if(!kw.trim()) return;
+    setLoading(true);
+    genOffset.current = (genOffset.current + 1) % 6;
+    const off = genOffset.current;
+    setTimeout(()=>{
+      const k = kw.trim();
+      const tocKws = getTocKws();
+      const t1 = tocKws[0] || k;
+      const t2 = tocKws[1] || '';
+      const n  = [['3가지','5가지','7가지','30일','10단계','21일'], ['비밀','법칙','습관','기술','공식','원칙']];
+      const pick = (arr, i) => arr[(i + off) % arr.length];
+      const allBase = [
+        [`${k}으로 인생이 달라지는 ${pick(n[0],0)} ${pick(n[1],0)}`,`${k} 한 권으로 ${pick(n[0],1)} 달라지는 이유`,`${k}의 모든 것: ${pick(n[1],1)} 완전 정복 가이드`],
+        [`${pick(n[0],2)} 안에 ${k} 완전 정복`,`${k}를 ${pick(n[0],3)} 만에 내 것으로 만드는 법`,`${k} ${pick(n[0],4)}: 지금 당장 시작하는 완벽 입문`],
+        [`왜 당신의 ${k}은 아직 시작되지 않았을까?`,`당신이 ${k}에 실패하는 진짜 이유`,`${k}, 왜 나는 안 될까?`],
+        [`${k}, 이렇게 하면 달라집니다`,`${k}이 쉬워지는 ${pick(n[0],0)} ${pick(n[1],2)}`,`${k} 고수들의 ${pick(n[1],3)}`],
+        [`처음 시작하는 ${k} 완벽 입문`,`${k} 입문자를 위한 친절한 안내서`,`${k} 왕초보 탈출 프로젝트`],
+        [`${k}의 ${pick(n[1],4)}`,`${k}을 바꾸는 작은 ${pick(n[1],5)}들`,`나만의 ${k} ${pick(n[1],0)}`],
+        [`아무도 알려주지 않은 ${k}의 진실`,`${k}에 대해 아무도 말해주지 않는 것들`,`${k} 전문가만 아는 숨겨진 비밀`],
+        [`하루 15분으로 완성하는 ${k}`,`매일 조금씩, ${pick(n[0],2)} 후 달라지는 ${k}`,`틈새 시간으로 완성하는 ${k}`],
+        [`${k} 전문가가 되는 ${pick(n[0],1)} 핵심 ${pick(n[1],5)}`,`${k} 고수로 가는 가장 빠른 길`,`${k} 실력을 ${pick(n[0],4)} 만에 끌어올리는 법`],
+        [`${k} 하나로 인생을 바꾼 사람들의 이야기`,`${k}이 삶을 바꿨습니다`,`${k}으로 달라진 ${pick(n[0],3)}: 실전 성공 스토리`],
+      ];
+      const base = allBase.map(variants => variants[off % variants.length]);
+
+      // 목차 키워드 연계 제목
+      const tocTitles = tocKws.length >= 2
+        ? [
+            `${t1}부터 ${t2}까지, ${k} 완벽 로드맵`,
+            `${tocKws.slice(0,2).join(', ')}을 한 권에 담은 ${k} 가이드`,
+            `${t1}으로 시작해 ${t2}로 완성하는 ${k}`,
+          ].map((t,i)=>[`${t1}부터 ${t2}까지, ${k} 완벽 로드맵`,`${tocKws.slice(0,2).join(', ')}을 한 권에 담은 ${k} 가이드`,`${t1}으로 시작해 ${t2}로 완성하는 ${k}`][(i+off)%3])
+            .filter((v,i,a)=>a.indexOf(v)===i)
+        : tocKws.length === 1
+          ? [`${t1}의 모든 것: ${k} 완전 정복`, `${t1}을 중심으로 배우는 ${k}`]
+          : [];
+
+      // 참고 이미지 스타일 반영
+      let refExtra = [];
+      if(refDetected) {
+        const r = refDetected;
+        if(r.includes('짧고') || r.includes('임팩트')) refExtra = [`${k}`,`${k}의 힘`,`${k}, 지금`,`단 하나의 ${k}`,`${k}: 원칙`];
+        else if(r.includes('질문')) refExtra = [`당신은 왜 아직 ${k}을 시작하지 않았나?`,`${k}, 당신에게 무엇인가요?`,`지금 ${k}하지 않으면 언제 할 것인가?`,`${k}, 두렵습니까 아니면 설레십니까?`];
+        else if(r.includes('숫자')) refExtra = [`${k}의 7가지 법칙`,`${k}으로 성공한 사람들의 5가지 공통점`,`하루 3가지 ${k} 루틴`,`${k} 고수가 되는 9가지 비밀`];
+        else if(r.includes('감성') || r.includes('스토리')) refExtra = [`${k}이 내 삶을 바꾼 날`,`그날 이후, 나의 ${k}`,`${k}이라는 여정`,`어느 날 나는 ${k}을 만났다`];
+        else if(r.includes('지시') || r.includes('직접')) refExtra = [`지금 당장 ${k}하라`,`그냥 ${k}해버려라`,`${k}, 일단 시작하라`,`더 이상 미루지 마라: ${k}`];
+        else if(r.includes('혜택') || r.includes('30일')) refExtra = [`30일 만에 완성하는 ${k}`,`${pick(n[0],3)} ${k} 챌린지`,`${pick(n[0],2)} ${k} 완성 플랜`,`${k} ${pick(n[0],4)} 성공 프로젝트`];
+        else refExtra = [`${k}의 새로운 기준`,`${k}을 다시 정의하다`,`${k}의 정석`,`나만의 ${k} 만들기`,`${k} 마스터 클래스`];
+        refExtra = refExtra.map((t,i) => refExtra[(i + off) % refExtra.length]).slice(0,4);
+      }
+      setList([...base, ...tocTitles, ...refExtra]);
+      setLoading(false);
+    }, 1200);
+  };
+
+  const genSub = () => {
+    if(!kw.trim()) return;
+    setSubLoading(true);
+    subOffset.current = (subOffset.current + 1) % 5;
+    const off = subOffset.current;
+    setTimeout(()=>{
+      const k = kw.trim();
+      const tocKws = getTocKws();
+      const t1 = tocKws[0] || k;
+      const t2 = tocKws[1] || '';
+      const targets = ['초보자','직장인','왕초보','누구나','바쁜 당신','30대'];
+      const pick = (arr, i) => arr[(i + off) % arr.length];
+      let subs = [];
+      if(subType === 'sentence') {
+        subs = [
+          `${pick(targets,0)}도 따라 할 수 있는 ${k} 완벽 가이드`,
+          `${pick(targets,1)}를 위한 ${k} 핵심 전략`,
+          tocKws.length ? `${tocKws.slice(0,2).join(', ')}을 한 권에 담은 실전 교과서` : `${k}의 모든 것을 담은 실전 교과서`,
+          `지금 당장 ${k}을 시작하는 가장 쉬운 방법`,
+          t2 ? `${t1}부터 ${t2}까지, 단계별로 완성하는 ${k}` : `${t1}으로 완성하는 ${k} 입문서`,
+          `${k}으로 인생을 바꾼 사람들의 진짜 이야기`,
+        ];
+      } else if(subType === 'short') {
+        subs = [
+          `${k} 완전 정복`,
+          `${k} 실전 가이드`,
+          `${k} 핵심 노하우`,
+          `${k} 마스터 클래스`,
+          `${k} 완벽 입문`,
+          `${t1} 성공 전략`,
+        ];
+      } else {
+        const kws = [...new Set([t1, t2, ...tocKws.slice(0,3)].filter(Boolean))].slice(0,4);
+        subs = [
+          kws.join(' | '),
+          kws.map(w=>'#'+w).join(' '),
+          `${k} · 전략 · 실전 · 성공`,
+          kws.slice(0,3).join(' + '),
+          `${kws[0]||k}, ${kws[1]||'핵심 정리'}, 실전 가이드`,
+          `${k} — ${kws.slice(0,2).join(' & ')||'핵심 노하우'}`,
+        ];
+      }
+      // off로 순서 회전
+      const rotated = subs.map((_,i) => subs[(i + off) % subs.length]);
+      setSubList(rotated);
+      setSubLoading(false);
+    }, 700);
+  };
+
+  return html`<div class="space-y-4">
+    <div class="card">
+      <h2 class="text-xl font-bold text-gray-800 mb-1">제목 다듬기</h2>
+      <p class="text-sm text-gray-400 mb-4">베스트셀러 패턴 + 참고 이미지 스타일을 반영한 AI 제목 생성</p>
+
+      <!-- 문체 확정 연동 알림 -->
+      ${styleData?.approved&&styleData?.rewrittenTOC?html`
+        <div class="bg-green-50 border border-green-200 rounded-xl px-4 py-2.5 mb-4 flex items-center gap-2">
+          <span class="text-green-500">✅</span>
+          <p class="text-xs text-green-700">이전 단계에서 <strong>${WRITING_STYLES.find(s=>s.id===styleData.style)?.name}</strong> 문체가 확정되었습니다. 제목도 해당 문체 스타일로 반영됩니다.</p>
+        </div>
+      `:''}
+
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+        <div>
+          <p class="text-sm font-semibold text-gray-700 mb-1">핵심 키워드</p>
+          <input value=${kw} onInput=${e=>setKw(e.target.value)}
+            class="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm"
+            placeholder="예: 재테크, 글쓰기, 다이어트..."/>
+          ${tocKeyword&&tocKeyword!==kw?html`
+            <button onClick=${()=>setKw(tocKeyword)} class="mt-1 text-xs text-indigo-500 hover:underline">
+              💡 목차 키워드 사용: "${tocKeyword}"
+            </button>
+          `:''}
+        </div>
+        <div>
+          <!-- 부제목 헤더: 타입 선택 + AI 버튼 -->
+          <div class="flex items-center justify-between mb-2 flex-wrap gap-2">
+            <p class="text-sm font-semibold text-gray-700">부제목 (선택)</p>
+            <div class="flex items-center gap-1.5 flex-wrap">
+              ${[['sentence','문장형'],['short','간결형'],['keyword','키워드형']].map(([t,label])=>html`
+                <button key=${t} onClick=${()=>{setSubType(t);setSubList([]);}}
+                  class=${'text-xs px-2.5 py-1 rounded-lg border font-medium transition '+(subType===t?'bg-indigo-500 text-white border-indigo-500':'bg-white text-gray-500 border-gray-200 hover:border-indigo-300 hover:text-indigo-600')}>
+                  ${label}
+                </button>
+              `)}
+              <button onClick=${genSub} disabled=${subLoading||!kw.trim()}
+                class="text-xs px-3 py-1 g-btn rounded-lg font-semibold disabled:opacity-40 ml-1 transition">
+                ${subLoading?'⏳':'✨ AI 추천'}
+              </button>
+            </div>
+          </div>
+          <input value=${sub} onInput=${e=>setSub(e.target.value)}
+            class="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm"
+            placeholder=${subType==='sentence'?'예: 초보자도 따라 할 수 있는 완벽 가이드':subType==='short'?'예: 핵심 노하우 완전 정복':'예: 재테크 | 투자 | 경제적 자유'}/>
+          <!-- 추천 목록 -->
+          ${subList.length>0?html`
+            <div class="mt-2 flex flex-wrap gap-1.5">
+              ${subList.map((s,i)=>html`
+                <button key=${i} onClick=${()=>setSub(s)}
+                  class=${'text-xs px-3 py-1.5 rounded-lg border transition '+(sub===s?'border-indigo-400 bg-indigo-50 text-indigo-700 font-medium':'border-gray-200 bg-white text-gray-600 hover:border-indigo-300 hover:bg-indigo-50/50')}>
+                  ${s}
+                </button>
+              `)}
+            </div>
+          `:''}
+        </div>
+      </div>
+
+      <!-- 제목 스타일 참고 이미지 -->
+      <div class="border-2 border-dashed border-amber-200 rounded-xl p-4 mb-4 bg-amber-50/40">
+        <div class="flex items-start gap-4">
+          <div class="flex-1">
+            <h4 class="font-semibold text-amber-800 text-sm mb-1">📎 원하는 제목 스타일 참고 이미지 (선택)</h4>
+            <p class="text-xs text-amber-600 mb-2">마음에 드는 책 표지나 제목 스타일 이미지를 첨부하면 그 스타일로 제목을 생성합니다</p>
+            <button onClick=${()=>fileRef.current?.click()} class="bg-amber-100 text-amber-700 border border-amber-300 px-3 py-1.5 rounded-lg text-xs hover:bg-amber-200">
+              📁 참고 이미지 업로드
+            </button>
+            <input ref=${fileRef} type="file" accept="image/*" style="display:none" onChange=${handleRefImg}/>
+          </div>
+          ${refImg?html`
+            <div class="flex-shrink-0">
+              <div class="relative">
+                <img src=${refImg} alt="참고" class="w-24 h-24 object-cover rounded-xl border-2 border-amber-300"/>
+                <button onClick=${()=>{setRefImg(null);setRefDetected('');}} class="absolute -top-2 -right-2 w-5 h-5 bg-red-500 text-white rounded-full text-xs flex items-center justify-center">✕</button>
+              </div>
+              ${refAnalyzing?html`
+                <div class="mt-1.5 flex items-center gap-1 text-xs text-amber-600">
+                  <span>⏳</span> 스타일 분석 중...
+                </div>
+              `:refDetected?html`
+                <div class="mt-1.5 bg-amber-100 border border-amber-300 rounded-lg px-2 py-1.5" style="max-width:130px">
+                  <p class="text-xs font-semibold text-amber-800">감지된 제목 스타일</p>
+                  <p class="text-xs text-amber-700 leading-tight mt-0.5">${refDetected}</p>
+                </div>
+              `:''}
+            </div>
+          `:''}
+        </div>
+      </div>
+
+      <button onClick=${generate} disabled=${loading||!kw.trim()}
+        class="w-full g-btn rounded-xl py-3 font-bold disabled:opacity-40 mb-4 transition">
+        ${loading?'🤖 AI가 제목 생성 중...':refDetected?'✨ 참고 이미지 스타일 반영해서 제목 생성':'✨ AI 제목 생성 (베스트셀러 패턴 반영)'}
+      </button>
+
+      <!-- 베스트셀러 패턴 -->
+      <div class="bg-amber-50 border border-amber-200 rounded-xl p-3 mb-4">
+        <p class="font-semibold text-amber-800 text-xs mb-1.5">📊 교보·예스24·알라딘 베스트셀러 제목 패턴</p>
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-0.5">
+          ${PATTERNS.map((p,i)=>html`<p key=${i} class="text-xs text-amber-700">• ${p}</p>`)}
+        </div>
+      </div>
+
+      <!-- 생성된 후보 -->
+      ${list.length>0?html`
+        <div>
+          <div class="flex items-center justify-between mb-2">
+            <p class="font-semibold text-gray-700">🎯 제목 후보 ${list.length}개</p>
+            <button onClick=${generate} class="text-xs text-indigo-500 hover:underline">🔁 재생성</button>
+          </div>
+          <div class="space-y-2">
+            ${list.map((t,i)=>html`
+              <div key=${i} class=${'tcard'+(sel===t?' on':'')} onClick=${()=>{setSel(t);setFinal(t);}}>
+                <div class="flex items-center gap-3">
+                  <span class="text-xs text-gray-400 font-mono w-5 flex-shrink-0">${i+1}</span>
+                  <span class="text-sm font-medium text-gray-800 flex-1">${t}</span>
+                  ${sel===t?html`<span class="text-indigo-500 text-xs font-bold">✓</span>`:''}
+                </div>
+              </div>
+            `)}
+          </div>
+        </div>
+      `:''}
+
+      <!-- 최종 제목 -->
+      <div class="mt-5 pt-4 border-t border-gray-100">
+        <p class="text-sm font-semibold text-gray-700 mb-2">✏️ 최종 제목 확정 (직접 수정 가능)</p>
+        <input value=${final} onInput=${e=>setFinal(e.target.value)}
+          class="w-full border-2 border-indigo-200 rounded-xl px-4 py-3 text-base font-bold text-gray-800"
+          placeholder="위에서 선택하거나 직접 입력하세요..."/>
+        ${final?html`
+          <div class="mt-3 bg-indigo-50 rounded-xl p-4">
+            <p class="font-black text-indigo-800 text-xl leading-tight">${final}</p>
+            ${sub?html`<p class="text-indigo-600 text-sm mt-2 font-medium">${sub}</p>`:''}
+          </div>
+        `:''}
+      </div>
+    </div>
+  </div>`;
+}
+
+// ── 표지 ───────────────────────────────────────────────
+function CoverStep({titleData, toc, data, onChange}) {
+  const DEF = PRESETS[0];
+  const [selId,  setSelId]  = useState(data?.selId  || DEF.id);
+  const [bg1,    setBg1]    = useState(data?.bg1    || DEF.bg1);
+  const [bg2,    setBg2]    = useState(data?.bg2    || DEF.bg2);
+  const [textC,  setTextC]  = useState(data?.textC  || DEF.text);
+  const [accent, setAccent] = useState(data?.accent || DEF.accent);
+  const [fonts,  setFonts]  = useState(data?.fonts  || []);
+  const [title,  setTitle]  = useState(titleData?.final || data?.title  || '');
+  const [sub,    setSub]    = useState(titleData?.sub   || data?.sub    || '');
+  const [author, setAuthor] = useState(data?.author || '');
+  const [intro,  setIntro]  = useState(data?.intro  || '');
+  const [prompt, setPrompt] = useState(data?.prompt || '');
+  const [pDone,  setPDone]  = useState(false);
+  const [saving, setSaving] = useState(false);
+  const coverRef = useRef(null);
+
+  const bgStyle = `linear-gradient(160deg, ${bg1}, ${bg2})`;
+
+  useEffect(()=>onChange({selId,bg1,bg2,textC,accent,fonts,title,sub,author,intro,prompt}),
+    [selId,bg1,bg2,textC,accent,fonts,title,sub,author,intro,prompt]);
+
+  const applyPreset = p => {
+    setSelId(p.id); setBg1(p.bg1); setBg2(p.bg2); setTextC(p.text); setAccent(p.accent);
+  };
+
+  const toggleFont = f => {
+    if(fonts.find(x=>x.id===f.id)) setFonts(fonts.filter(x=>x.id!==f.id));
+    else if(fonts.length<2) setFonts([...fonts,f]);
+  };
+
+  const [introLoading, setIntroLoading] = useState(false);
+  const generateIntro = () => {
+    setIntroLoading(true);
+    setTimeout(()=>{
+      const t = title || '이 책';
+      const chapters = (toc||[]).slice(0,3).map(ch=>ch.title||ch.origTitle||'').filter(Boolean);
+      const kws = chapters.join(', ') || '핵심 내용';
+      const templates = [
+        `${t}이 당신의 삶을 바꿀 것입니다.\n${kws}을 통해 지금 바로 시작하세요.`,
+        `${kws}의 모든 것을 담았습니다.\n한 권으로 끝내는 완벽한 가이드.`,
+        `막막했던 ${chapters[0]||t},\n이제 이 책 한 권으로 해결하세요.`,
+        `수많은 시행착오 끝에 찾아낸 ${t}의 핵심.\n당신의 시간을 아껴드립니다.`,
+        `${t}을 통해 원하는 삶에 한 발 더 가까워지세요.\n지금 이 순간이 변화의 시작입니다.`,
+      ];
+      setIntro(templates[Math.floor(Math.random()*templates.length)]);
+      setIntroLoading(false);
+    }, 800);
+  };
+
+  const saveAsJpg = async () => {
+    if(!coverRef.current) return;
+    setSaving(true);
+    try {
+      const canvas = await html2canvas(coverRef.current, {
+        scale: 3,
+        useCORS: true,
+        backgroundColor: null,
+      });
+      const link = document.createElement('a');
+      link.download = (title||'표지') + '_cover.jpg';
+      link.href = canvas.toDataURL('image/jpeg', 0.95);
+      link.click();
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const genPrompt = () => {
+    setPrompt(`Flat 2D book cover design, front view only, no 3D perspective, no spine, no shadow, straight-on flat lay, "${title||'전자책'}", minimalist modern Korean book cover, gradient background from ${bg1} to ${bg2}, clean typography layout, subtle geometric decoration, high resolution, A4 portrait ratio, professional publishing design, top-down flat view`);
+    setPDone(true);
+  };
+
+  const tf = fonts[0]?.css || 'Noto Sans KR,sans-serif';
+  const bf = fonts[1]?.css || 'serif';
+
+  // 반투명 구분선 색: 밝은 배경이면 어둡게, 어두운 배경이면 밝게
+  const isDark = textC === '#ffffff' || textC.startsWith('#fff') || textC.startsWith('#ccd') || textC.startsWith('#e0');
+  const dividerColor = isDark ? 'rgba(255,255,255,0.25)' : 'rgba(0,0,0,0.15)';
+
+  return html`<div class="space-y-4">
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+
+      <!-- 왼쪽: 설정 패널 -->
+      <div class="space-y-4">
+        <div class="card">
+          <h2 class="text-xl font-bold text-gray-800 mb-4">표지 디자인</h2>
+
+          <!-- ① 색상 프리셋 -->
+          <div class="mb-5">
+            <p class="text-sm font-semibold text-gray-700 mb-2">🎨 색상 프리셋 (클릭으로 선택)</p>
+            <div style="display:grid;grid-template-columns:repeat(8,1fr);gap:6px;margin-bottom:8px">
+              ${PRESETS.map(p=>html`
+                <div key=${p.id} title=${p.name}
+                  onClick=${()=>applyPreset(p)}
+                  style=${{
+                    background:`linear-gradient(160deg,${p.bg1},${p.bg2})`,
+                    width:'100%', aspectRatio:'1', borderRadius:'8px',
+                    cursor:'pointer', transition:'.15s',
+                    border: selId===p.id ? '3px solid #667eea' : '3px solid transparent',
+                    boxShadow: selId===p.id ? '0 0 0 2px #a5b4fc' : '0 1px 4px rgba(0,0,0,.12)',
+                    transform: selId===p.id ? 'scale(1.12)' : 'scale(1)',
+                  }}>
+                </div>
+              `)}
+            </div>
+            <p class="text-xs text-gray-400">현재: <strong class="text-gray-600">${PRESETS.find(p=>p.id===selId)?.name||'커스텀'}</strong></p>
+          </div>
+
+          <!-- ② 직접 색상 설정 -->
+          <div class="mb-5 p-3 bg-gray-50 rounded-xl">
+            <p class="text-sm font-semibold text-gray-700 mb-3">🖌️ 직접 색상 설정</p>
+            <div class="grid grid-cols-2 gap-3">
+              ${[
+                {label:'배경 시작색', val:bg1, set:setBg1},
+                {label:'배경 끝색',   val:bg2, set:setBg2},
+                {label:'텍스트 색',   val:textC, set:setTextC},
+                {label:'강조 색',     val:accent, set:setAccent},
+              ].map(({label,val,set})=>html`
+                <div key=${label} class="flex items-center gap-2">
+                  <input type="color" value=${val}
+                    onInput=${e=>{set(e.target.value); setSelId('custom');}}
+                    style="width:36px;height:36px;border:none;border-radius:8px;cursor:pointer;padding:2px;background:white;border:1px solid #e5e7eb"/>
+                  <div>
+                    <p class="text-xs font-medium text-gray-700">${label}</p>
+                    <p class="text-xs text-gray-400 font-mono">${val}</p>
+                  </div>
+                </div>
+              `)}
+            </div>
+            <!-- 그라디언트 미리보기 바 -->
+            <div style=${{background:bgStyle, height:'12px', borderRadius:'6px', marginTop:'10px'}}></div>
+          </div>
+
+          <!-- ③ 폰트 -->
+          <div class="mb-5">
+            <p class="text-sm font-semibold text-gray-700 mb-1">🔤 폰트 선택 (최대 2개)</p>
+            <p class="text-xs text-gray-400 mb-2">1번: 제목 / 2번: 부제목·본문</p>
+            <div class="space-y-2">
+              ${FONTS.map(f=>{
+                const idx=fonts.findIndex(x=>x.id===f.id);
+                const isSel=idx>=0;
+                return html`
+                  <div key=${f.id} class=${'fcard'+(isSel?' on':'')} onClick=${()=>toggleFont(f)}>
+                    <div class="flex items-center justify-between">
+                      <div class="flex items-center gap-2">
+                        ${isSel?html`<span class="w-5 h-5 bg-indigo-500 text-white rounded-full text-xs flex items-center justify-center flex-shrink-0">${idx+1}</span>`:''}
+                        <div>
+                          <p class="font-semibold text-gray-800 text-sm" style=${{fontFamily:f.css}}>${f.name}</p>
+                          <p class="text-xs text-gray-400">${f.desc}</p>
+                        </div>
+                      </div>
+                      <span class="text-xl text-gray-300" style=${{fontFamily:f.css}}>가Aa</span>
+                    </div>
+                  </div>
+                `;
+              })}
+            </div>
+          </div>
+
+          <!-- ④ 텍스트 필드 -->
+          <div class="space-y-3">
+            ${[
+              {label:'📌 책 제목 *',         val:title,  set:setTitle,  ph:'책 제목'},
+              {label:'📎 부제목 (선택)',       val:sub,    set:setSub,    ph:'부제목'},
+              {label:'✍️ 저자명 (필명 가능)', val:author, set:setAuthor, ph:'홍길동 / 닉네임'},
+            ].map(({label,val,set,ph})=>html`
+              <div key=${label}>
+                <p class="text-xs font-semibold text-gray-600 mb-1">${label}</p>
+                <input value=${val} onInput=${e=>set(e.target.value)}
+                  class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm" placeholder=${ph}/>
+              </div>
+            `)}
+            <div>
+              <div class="flex items-center justify-between mb-1">
+                <p class="text-xs font-semibold text-gray-600">💬 표지 소개글 (2줄 이내)</p>
+                <button onClick=${generateIntro} disabled=${introLoading}
+                  class="text-xs bg-indigo-100 text-indigo-600 px-2.5 py-1 rounded-lg hover:bg-indigo-200 disabled:opacity-50 transition">
+                  ${introLoading?'⏳ 생성 중...':'✨ AI 추천'}
+                </button>
+              </div>
+              <textarea value=${intro} onInput=${e=>setIntro(e.target.value)}
+                class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm resize-none" rows=${2}
+                placeholder="예: 당신의 삶을 바꿀 단 하나의 책&#10;지금 바로 시작하세요"></textarea>
+            </div>
+          </div>
+        </div>
+
+        <!-- AI 프롬프트 -->
+        <div class="card">
+          <div class="flex items-center justify-between mb-2">
+            <h4 class="font-bold text-gray-700 text-sm">🖼️ AI 이미지 프롬프트 (Midjourney/DALL-E용)</h4>
+            <button onClick=${genPrompt} class="text-xs bg-purple-100 text-purple-600 px-3 py-1.5 rounded-lg hover:bg-purple-200">✨ 생성</button>
+          </div>
+          <textarea value=${prompt} onInput=${e=>setPrompt(e.target.value)}
+            class="w-full border border-gray-200 rounded-xl px-3 py-2 text-xs text-gray-600 resize-none" rows=${4}
+            placeholder="생성 버튼을 클릭하세요..."></textarea>
+          ${pDone?html`<p class="text-xs text-green-600 mt-1">✓ 복사해서 AI 이미지 생성 도구에 붙여넣기하세요!</p>`:''}
+        </div>
+      </div>
+
+      <!-- 오른쪽: A4 미리보기 -->
+      <div class="card">
+        <div class="flex items-center justify-between mb-3">
+          <h3 class="font-bold text-gray-700">👁️ 표지 미리보기 (A4 비율)</h3>
+          <div class="flex items-center gap-2">
+            <span class="text-xs text-gray-400 bg-gray-100 px-2 py-1 rounded">210 × 297mm</span>
+            <button onClick=${saveAsJpg} disabled=${saving}
+              class="text-xs bg-green-500 text-white px-3 py-1.5 rounded-lg hover:bg-green-600 disabled:opacity-50 transition font-semibold">
+              ${saving ? '⏳ 저장 중...' : '💾 JPG 저장'}
+            </button>
+          </div>
+        </div>
+
+        <!-- A4 비율 컨테이너 (210:297 = 1:1.414) -->
+        <div style="position:relative;width:100%;padding-bottom:141.4%">
+          <div ref=${coverRef} style=${{
+            position:'absolute', inset:0,
+            background: bgStyle,
+            color: textC,
+            borderRadius:'8px',
+            overflow:'hidden',
+            boxShadow:'0 8px 32px rgba(0,0,0,0.18)',
+          }}>
+            <!-- 장식 요소 -->
+            <div style="position:absolute;inset:0;pointer-events:none;opacity:.1">
+              <div style=${{position:'absolute',top:'6%',right:'8%',width:'22%',height:'22%',borderRadius:'50%',border:`2px solid ${accent}`}}></div>
+              <div style=${{position:'absolute',bottom:'12%',left:'5%',width:'14%',height:'14%',borderRadius:'50%',border:`1px solid ${accent}`}}></div>
+              <div style=${{position:'absolute',top:'20%',left:'8%',width:'1.5%',height:'12%',borderRadius:'4px',background:accent}}></div>
+              <div style=${{position:'absolute',top:'20%',left:'12%',width:'1%',height:'8%',borderRadius:'4px',background:accent}}></div>
+            </div>
+
+            <!-- 콘텐츠 (padding은 A4 비율 기준 %) -->
+            <div style="position:absolute;inset:0;padding:7%;display:flex;flex-direction:column">
+              <!-- 상단 강조선 -->
+              <div style=${{width:'15%',height:'3px',borderRadius:'2px',background:accent,marginBottom:'5%'}}></div>
+
+              <!-- 소개글 -->
+              ${intro?html`
+                <p style=${{fontSize:'clamp(9px,1.8vw,13px)',opacity:.75,marginBottom:'4%',lineHeight:1.7,fontFamily:bf,color:textC,whiteSpace:'pre-line'}}>
+                  ${intro}
+                </p>
+              `:''}
+
+              <!-- 제목 영역 (중앙) -->
+              <div style="flex:1;display:flex;flex-direction:column;justify-content:center">
+                <h1 style=${{fontSize:'clamp(16px,4vw,32px)',fontWeight:900,lineHeight:1.25,marginBottom:'4%',fontFamily:tf,color:textC,wordBreak:'keep-all'}}>
+                  ${title||'책 제목'}
+                </h1>
+                ${sub?html`
+                  <p style=${{fontSize:'clamp(10px,2vw,15px)',opacity:.8,lineHeight:1.7,fontFamily:bf,color:textC,wordBreak:'keep-all'}}>
+                    ${sub}
+                  </p>
+                `:''}
+              </div>
+
+              <!-- 하단 바 -->
+              <div style=${{paddingTop:'4%',borderTop:`1px solid ${dividerColor}`,display:'flex',justifyContent:'space-between',alignItems:'center'}}>
+                <p style=${{fontSize:'clamp(9px,1.8vw,13px)',fontWeight:600,opacity:.9,fontFamily:bf,color:textC}}>
+                  ${author||'저자명'}
+                </p>
+                <span style=${{color:accent,fontSize:'clamp(12px,2.5vw,20px)'}}>◈</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 현재 색상 정보 -->
+        <div class="mt-3 grid grid-cols-4 gap-2">
+          ${[
+            {label:'배경1', color:bg1},
+            {label:'배경2', color:bg2},
+            {label:'텍스트', color:textC},
+            {label:'강조', color:accent},
+          ].map(({label,color})=>html`
+            <div key=${label} class="text-center">
+              <div style=${{background:color,height:'20px',borderRadius:'4px',marginBottom:'3px',border:'1px solid #e5e7eb'}}></div>
+              <p class="text-xs text-gray-400">${label}</p>
+              <p class="text-xs text-gray-500 font-mono">${color}</p>
+            </div>
+          `)}
+        </div>
+        ${fonts.length>0?html`
+          <div class="mt-2 p-2 bg-gray-50 rounded-lg flex gap-2 flex-wrap">
+            ${fonts.map((f,i)=>html`<span key=${f.id} class="text-xs bg-white border border-gray-200 px-2 py-1 rounded text-gray-600">${i+1}. ${f.name}</span>`)}
+          </div>
+        `:''}
+      </div>
+    </div>
+  </div>`;
+}
+
+// ── 내보내기 패널 ──────────────────────────────────────
+function ExportPanel({mindMap, toc, styleData, titleData, coverData}) {
+  const [done, setDone] = useState('');
+
+  const flash = id => { setDone(id); setTimeout(() => setDone(''), 2200); };
+
+  const handleCopyTOC = () => {
+    const lines = [];
+    (toc||[]).forEach((ch, ci) => {
+      lines.push(`제${ci+1}장. ${ch.title}`);
+      (ch.sections||[]).forEach((s, si) => lines.push(`  ${ci+1}.${si+1} ${s.title}`));
+    });
+    clipCopy(lines.join('\n')).then(() => flash('toc'));
+  };
+
+  const handleCopyMD = () => {
+    clipCopy(buildMarkdown(titleData, toc, styleData, coverData, mindMap)).then(() => flash('md'));
+  };
+
+  const handleDlMD = () => {
+    dlFile(buildMarkdown(titleData, toc, styleData, coverData, mindMap),
+      safeFilename(titleData?.final) + '.md', 'text/markdown;charset=utf-8');
+    flash('dlmd');
+  };
+
+  const handleDlCover = () => {
+    dlFile(buildCoverHTML(titleData, coverData),
+      safeFilename(titleData?.final) + '_표지.html', 'text/html;charset=utf-8');
+    flash('cover');
+  };
+
+  const handleDlSummary = () => {
+    dlFile(buildSummaryHTML(titleData, toc, styleData, coverData, mindMap),
+      safeFilename(titleData?.final) + '_요약.html', 'text/html;charset=utf-8');
+    flash('sum');
+  };
+
+  const BTNS = [
+    {
+      id:'toc', icon:'📋', label:'목차 복사',
+      desc:'텍스트로 클립보드 복사',
+      color:'border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100',
+      onClick: handleCopyTOC,
+    },
+    {
+      id:'md', icon:'📝', label:'전체 복사',
+      desc:'마크다운 형식으로 복사',
+      color:'border-purple-200 bg-purple-50 text-purple-700 hover:bg-purple-100',
+      onClick: handleCopyMD,
+    },
+    {
+      id:'dlmd', icon:'⬇️', label:'마크다운 저장',
+      desc:'.md 파일 다운로드',
+      color:'border-indigo-200 bg-indigo-50 text-indigo-700 hover:bg-indigo-100',
+      onClick: handleDlMD,
+    },
+    {
+      id:'cover', icon:'🖼️', label:'표지 저장',
+      desc:'HTML 파일 · 브라우저 인쇄 가능',
+      color:'border-orange-200 bg-orange-50 text-orange-700 hover:bg-orange-100',
+      onClick: handleDlCover,
+    },
+    {
+      id:'sum', icon:'📄', label:'요약 저장',
+      desc:'전체 요약 HTML 파일',
+      color:'border-green-200 bg-green-50 text-green-700 hover:bg-green-100',
+      onClick: handleDlSummary,
+    },
+  ];
+
+  return html`<div class="card">
+    <div class="flex items-center gap-3 mb-4">
+      <span class="text-2xl">📥</span>
+      <div>
+        <h3 class="font-bold text-gray-800">내보내기</h3>
+        <p class="text-xs text-gray-400">원하는 형식으로 결과물을 저장하거나 복사하세요</p>
+      </div>
+    </div>
+
+    <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 mb-4">
+      ${BTNS.map(b => html`
+        <button key=${b.id} onClick=${b.onClick}
+          class=${'border-2 rounded-xl p-3 text-center transition ' + b.color}>
+          <p class="text-2xl mb-1">${done===b.id ? '✅' : b.icon}</p>
+          <p class="text-xs font-bold leading-tight">${done===b.id ? (b.id==='toc'||b.id==='md' ? '복사됨!' : '저장됨!') : b.label}</p>
+          <p class="text-xs opacity-60 mt-0.5 leading-tight">${b.desc}</p>
+        </button>
+      `)}
+    </div>
+
+    <!-- 표지 저장 사용 안내 -->
+    <div class="bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 flex items-start gap-3">
+      <span class="text-lg flex-shrink-0 mt-0.5">💡</span>
+      <div class="text-xs text-amber-800 leading-relaxed">
+        <strong>표지 저장</strong> → HTML 파일을 브라우저로 열고 <kbd class="bg-amber-200 px-1 rounded">Ctrl+P</kbd> 인쇄 또는 스크린샷으로 PNG 저장 가능<br/>
+        <strong>요약 저장</strong> → 전체 내용을 정리한 HTML 페이지 (팀 공유·보관용)
+      </div>
+    </div>
+  </div>`;
+}
+
+// ── 완성 요약 ───────────────────────────────────────────
+function Summary({mindMap,toc,style,title,cover}) {
+  return html`<div class="space-y-4">
+    <div class="card text-center">
+      <p class="text-5xl mb-3">🎉</p>
+      <h2 class="text-2xl font-black text-gray-800 mb-2">전자책 초안 완성!</h2>
+      <p class="text-gray-500">모든 단계가 완료되었습니다. 아래에서 전체 내용을 확인하세요.</p>
+    </div>
+
+    <${ExportPanel} mindMap=${mindMap} toc=${toc} styleData=${style} titleData=${title} coverData=${cover}/>
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+      <div class="card">
+        <h3 class="font-bold text-indigo-600 mb-3">📚 책 정보</h3>
+        <div class="space-y-2 text-sm">
+          <div><span class="text-gray-400">제목: </span><strong class="text-gray-800">${title?.final||'-'}</strong></div>
+          ${title?.sub?html`<div><span class="text-gray-400">부제: </span><span class="text-gray-700">${title.sub}</span></div>`:''}
+          ${cover?.author?html`<div><span class="text-gray-400">저자: </span><span class="text-gray-700">${cover.author}</span></div>`:''}
+          ${style?.cat?html`<div><span class="text-gray-400">카테고리: </span><span class="text-gray-700">${style.cat}</span></div>`:''}
+          ${style?.style?html`<div><span class="text-gray-400">문체: </span><span class="text-gray-700">${WRITING_STYLES.find(s=>s.id===style.style)?.name}</span></div>`:''}
+        </div>
+      </div>
+      <div class="card">
+        <h3 class="font-bold text-green-600 mb-3">📋 목차 (${toc?.length||0}챕터)</h3>
+        <div class="space-y-1 max-h-44 overflow-y-auto text-sm">
+          ${toc?.map((ch,i)=>html`
+            <div key=${ch.id}>
+              <p class="font-semibold text-gray-800">제${i+1}장. ${ch.title}</p>
+              ${ch.sections?.map((s,j)=>html`<p key=${s.id} class="text-gray-500 pl-3 text-xs">${i+1}.${j+1} ${s.title}</p>`)}
+            </div>
+          `)}
+        </div>
+      </div>
+      <div class="card">
+        <h3 class="font-bold text-purple-600 mb-3">🗺️ 마인드맵</h3>
+        <p class="font-bold text-gray-800 text-sm mb-2">중심: ${mindMap?.text}</p>
+        <div class="space-y-1">
+          ${mindMap?.children?.map(n=>html`
+            <div key=${n.id} class="flex items-center gap-2 text-sm">
+              <div class="w-3 h-3 rounded-full flex-shrink-0" style=${{background:n.color}}></div>
+              <span class="text-gray-700">${n.text}</span>
+              ${n.children.length>0?html`<span class="text-gray-400 text-xs">(${n.children.length}개)</span>`:''}
+            </div>
+          `)}
+        </div>
+      </div>
+      ${cover?.prompt?html`
+        <div class="card">
+          <h3 class="font-bold text-orange-600 mb-3">🖼️ 이미지 프롬프트</h3>
+          <p class="text-xs text-gray-600 bg-gray-50 rounded-lg p-3 leading-relaxed">${cover.prompt}</p>
+          <p class="text-xs text-green-600 mt-2">→ Midjourney / DALL-E / Stable Diffusion에 사용하세요</p>
+        </div>
+      `:''}
+    </div>
+    <div class="card">
+      <h3 class="font-bold text-gray-700 mb-3">📥 다음 단계</h3>
+      <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+        ${[
+          {icon:'📝',t:'본문 작성',d:'목차를 기반으로 각 챕터를 작성하세요'},
+          {icon:'🖼️',t:'표지 이미지',d:'AI 프롬프트로 표지 이미지를 생성하세요'},
+          {icon:'📱',t:'전자책 출판',d:'크몽, 클래스101, 탈잉 등에 업로드하세요'},
+        ].map((item,i)=>html`
+          <div key=${i} class="bg-gradient-to-br from-indigo-50 to-purple-50 rounded-xl p-4">
+            <p class="text-2xl mb-2">${item.icon}</p>
+            <p class="font-semibold text-gray-800 mb-1 text-sm">${item.t}</p>
+            <p class="text-xs text-gray-500">${item.d}</p>
+          </div>
+        `)}
+      </div>
+    </div>
+  </div>`;
+}
+
+// ── 메인 앱 ────────────────────────────────────────────
+const STORAGE_KEY = 'ebook-draft-v1';
+
+const loadSaved = () => {
+  try { return JSON.parse(localStorage.getItem(STORAGE_KEY)) || {}; } catch { return {}; }
+};
+
+function App() {
+  const saved = loadSaved();
+  const [step,setStep]           = useState(saved.step ?? 0);
+  const [bsData,setBsData]       = useState(saved.bsData || {});
+  const [mindMap,setMindMap]     = useState(saved.mindMap || null);
+  const [toc,setTOC]             = useState(saved.toc || []);
+  const [styleData,setStyleData] = useState(saved.styleData || {});
+  const [titleData,setTitleData] = useState(saved.titleData || {});
+  const [coverData,setCoverData] = useState(saved.coverData || {});
+  const [done,setDone]           = useState(saved.done || false);
+  const [savedAt,setSavedAt]     = useState('');
+
+  // 자동 저장
+  useEffect(() => {
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify({step,bsData,mindMap,toc,styleData,titleData,coverData,done}));
+      const t = new Date().toLocaleTimeString('ko-KR',{hour:'2-digit',minute:'2-digit'});
+      setSavedAt(t);
+    } catch {}
+  }, [step,bsData,mindMap,toc,styleData,titleData,coverData,done]);
+
+  // 전체 초기화
+  const resetAll = () => {
+    if(!confirm('모든 내용을 지우고 처음부터 시작할까요?\n작성한 내용이 모두 삭제됩니다.')) return;
+    localStorage.removeItem(STORAGE_KEY);
+    setStep(0); setBsData({}); setMindMap(null); setTOC([]); setStyleData({}); setTitleData({}); setCoverData({}); setDone(false);
+  };
+
+  // 브레인스토밍 → 마인드맵: 선택한 주제를 중심 주제로 전달
+  const handleBsExtract = (selTopics) => {
+    if(selTopics.length>0 && !mindMap) {
+      setMindMap({id:'n0',text:selTopics[0],level:0,children:[],color:'#FFD93D'});
+    }
+  };
+
+  const canNext=()=>{
+    if(done) return true;
+    if(step===0) return Object.values(bsData?.vals||{}).some(v=>v?.trim().length>0);
+    if(step===1) return mindMap&&mindMap.children.length>0;
+    if(step===2) return toc.length>0;
+    if(step===3) return !!styleData.style;
+    if(step===4) return !!(titleData.final||titleData.kw);
+    return true;
+  };
+
+  const next=()=>{
+    // 브레인스토밍 → 마인드맵으로 넘어갈 때 선택 주제 반영
+    if(step===0 && bsData?.selTopics?.length>0 && !mindMap) {
+      setMindMap({id:'n0',text:bsData.selTopics[0],level:0,children:[],color:'#FFD93D'});
+    }
+    if(step<STEPS.length-1) setStep(s=>s+1); else setDone(true);
+  };
+  const back=()=>{ if(done){setDone(false);return;} if(step>0) setStep(s=>s-1); };
+
+  return html`<div class="min-h-screen">
+    <div class="g-bg text-white py-4 px-6 shadow-lg">
+      <div class="max-w-5xl mx-auto flex items-center justify-between">
+        <div class="flex items-center gap-3">
+          <span class="text-2xl">📚</span>
+          <div>
+            <h1 class="font-black text-lg leading-tight">전자책 초안 작성 앱</h1>
+            <p class="text-xs" style="color:rgba(255,255,255,.7)">브레인스토밍부터 표지까지 한 번에</p>
+          </div>
+        </div>
+        <div class="flex items-center gap-3">
+          ${savedAt?html`
+            <div class="text-right hidden sm:block">
+              <p class="text-xs" style="color:rgba(255,255,255,.55)">자동 저장됨</p>
+              <p class="text-xs font-semibold" style="color:rgba(255,255,255,.85)">${savedAt}</p>
+            </div>
+          `:''}
+          <button onClick=${resetAll}
+            class="text-xs px-3 py-1.5 rounded-lg border font-medium transition"
+            style="border-color:rgba(255,255,255,.3);color:rgba(255,255,255,.7);background:rgba(255,255,255,.08)"
+            onMouseOver=${e=>e.currentTarget.style.background='rgba(255,255,255,.18)'}
+            onMouseOut=${e=>e.currentTarget.style.background='rgba(255,255,255,.08)'}>
+            🗑️ 초기화
+          </button>
+          ${!done?html`<div class="text-right"><p class="text-xs" style="color:rgba(255,255,255,.7)">진행</p><p class="font-bold">${step+1} / ${STEPS.length}</p></div>`:''}
+        </div>
+      </div>
+    </div>
+
+    ${!done?html`
+      <div class="bg-white border-b border-gray-100 shadow-sm sticky top-0 z-10">
+        <div class="max-w-5xl mx-auto px-4 py-3">
+          <div class="flex items-center gap-1">
+            ${STEPS.map((name,i)=>html`
+              <${Fragment} key=${i}>
+                <button onClick=${()=>{if(i<=step)setStep(i);}}
+                  class=${'step-btn flex items-center gap-1.5 px-2 sm:px-3 py-1.5 rounded-lg text-xs font-medium flex-shrink-0 '+
+                    (i===step?'g-bg text-white shadow-md':i<step?'bg-green-100 text-green-700 hover:bg-green-200 cursor-pointer':'bg-gray-100 text-gray-400 cursor-not-allowed')}>
+                  <span>${SICONS[i]}</span>
+                  <span class="hidden sm:inline">${name}</span>
+                  ${i<step?html`<span>✓</span>`:''}
+                </button>
+                ${i<STEPS.length-1?html`<div class=${'h-0.5 flex-1 rounded '+(i<step?'bg-green-300':'bg-gray-200')}></div>`:''}
+              </${Fragment}>
+            `)}
+          </div>
+        </div>
+      </div>
+    `:''}
+
+    <div class="max-w-5xl mx-auto px-4 py-6">
+      ${done
+        ? html`<${Summary} mindMap=${mindMap} toc=${toc} style=${styleData} title=${titleData} cover=${coverData} bs=${bsData}/>`
+        : html`
+          ${step===0&&html`<${BrainStormStep} data=${bsData} onChange=${setBsData} onExtract=${handleBsExtract}/>`}
+          ${step===1&&html`<${MindMapStep} data=${mindMap} onChange=${setMindMap} suggestedTopics=${bsData?.selTopics||[]}/>`}
+          ${step===2&&html`<${TOCStep} mindMap=${mindMap} data=${toc} onChange=${setTOC}/>`}
+          ${step===3&&html`<${StyleStep} data=${styleData} onChange=${setStyleData} toc=${toc}/>`}
+          ${step===4&&html`<${TitleStep} mindMap=${mindMap} styleData=${styleData} toc=${toc} data=${titleData} onChange=${setTitleData}/>`}
+          ${step===5&&html`<${CoverStep} titleData=${titleData} toc=${toc} data=${coverData} onChange=${setCoverData}/>`}
+        `
+      }
+
+      <div class="flex items-center justify-between mt-6 pt-4">
+        <button onClick=${back} disabled=${!done&&step===0}
+          class="flex items-center gap-2 px-5 py-2.5 bg-white border border-gray-200 rounded-xl text-gray-600 font-medium hover:bg-gray-50 disabled:opacity-30 shadow-sm">
+          ← 이전
+        </button>
+        ${!done?html`<p class="text-xs text-gray-400">${SICONS[step]} ${STEPS[step]}</p>`:''}
+        <button onClick=${next} disabled=${!canNext()&&!done}
+          class=${'flex items-center gap-2 px-5 py-2.5 rounded-xl font-bold shadow-sm transition '+(canNext()||done?'g-btn':'bg-gray-200 text-gray-400 cursor-not-allowed')}>
+          ${done?'처음으로 🔄':step===STEPS.length-1?'완성! 🎉':'다음 →'}
+        </button>
+      </div>
+
+      <!-- 단계별 안내 -->
+      ${!done?html`
+        <p class="text-center text-xs text-gray-300 mt-3">
+          ${step===0?'✏️ 솔직하게 적을수록 더 좋은 주제가 나옵니다':
+            step===1?'🗺️ 중심 주제 아래 소주제를 자유롭게 추가하세요':
+            step===2?'📋 챕터 제목을 클릭하면 바로 수정할 수 있습니다':
+            step===3?'✍️ 책의 톤&매너를 결정하는 중요한 단계입니다':
+            step===4?'📝 AI 제목을 선택 후 자유롭게 수정하세요':
+            '🎨 색상 피커로 원하는 색을 직접 골라보세요'}
+        </p>
+      `:''}
+    </div>
+  </div>`;
+}
+
+document.getElementById('root').innerHTML='';
+render(html`<${App}/>`, document.getElementById('root'));
+</script>
+</body>
+</html>

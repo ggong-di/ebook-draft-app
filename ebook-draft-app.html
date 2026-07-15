@@ -1535,9 +1535,8 @@ function CoverStep({titleData, toc, data, onChange}) {
   const coverRef = useRef(null);
   const bgImgRef = useRef(null);
 
-  const bgStyle = bgImg
-    ? `url("${bgImg}") center/cover no-repeat`
-    : `linear-gradient(160deg, ${bg1}, ${bg2})`;
+  const [previewTab, setPreviewTab] = useState('text');
+  const gradientStyle = `linear-gradient(160deg, ${bg1}, ${bg2})`;
 
   useEffect(()=>onChange({selId,bg1,bg2,textC,accent,fonts,title,sub,author,intro,prompt,bgImg}),
     [selId,bg1,bg2,textC,accent,fonts,title,sub,author,intro,prompt,bgImg]);
@@ -1755,92 +1754,97 @@ function CoverStep({titleData, toc, data, onChange}) {
         </div>
       </div>
 
-      <!-- 오른쪽: A4 미리보기 -->
+      <!-- 오른쪽: A4 미리보기 (탭 2개) -->
       <div class="card">
         <div class="flex items-center justify-between mb-3">
           <h3 class="font-bold text-gray-700">👁️ 표지 미리보기 (A4 비율)</h3>
-          <div class="flex items-center gap-2">
-            <span class="text-xs text-gray-400 bg-gray-100 px-2 py-1 rounded">210 × 297mm</span>
-            <button onClick=${saveAsJpg} disabled=${saving}
-              class="text-xs bg-green-500 text-white px-3 py-1.5 rounded-lg hover:bg-green-600 disabled:opacity-50 transition font-semibold">
-              ${saving ? '⏳ 저장 중...' : '💾 JPG 저장'}
-            </button>
-          </div>
+          <span class="text-xs text-gray-400 bg-gray-100 px-2 py-1 rounded">210 × 297mm</span>
         </div>
 
-        <!-- A4 비율 컨테이너 (210:297 = 1:1.414) -->
-        <div style="position:relative;width:100%;padding-bottom:141.4%">
-          <div ref=${coverRef} style=${{
-            position:'absolute', inset:0,
-            background: bgStyle,
-            backgroundColor: bg1,
-            color: textC,
-            borderRadius:'8px',
-            overflow:'hidden',
-            boxShadow:'0 8px 32px rgba(0,0,0,0.18)',
-          }}>
-            <!-- 장식 요소 -->
-            <div style="position:absolute;inset:0;pointer-events:none;opacity:.1">
-              <div style=${{position:'absolute',top:'6%',right:'8%',width:'22%',height:'22%',borderRadius:'50%',border:`2px solid ${accent}`}}></div>
-              <div style=${{position:'absolute',bottom:'12%',left:'5%',width:'14%',height:'14%',borderRadius:'50%',border:`1px solid ${accent}`}}></div>
-              <div style=${{position:'absolute',top:'20%',left:'8%',width:'1.5%',height:'12%',borderRadius:'4px',background:accent}}></div>
-              <div style=${{position:'absolute',top:'20%',left:'12%',width:'1%',height:'8%',borderRadius:'4px',background:accent}}></div>
-            </div>
+        <!-- 탭 -->
+        <div class="flex gap-2 mb-4">
+          <button onClick=${()=>setPreviewTab('text')}
+            class=${'flex-1 py-2 rounded-xl text-sm font-semibold transition '+(previewTab==='text'?'bg-indigo-500 text-white':'bg-gray-100 text-gray-500 hover:bg-gray-200')}>
+            ✏️ 텍스트 표지
+          </button>
+          <button onClick=${()=>setPreviewTab('ai')}
+            class=${'flex-1 py-2 rounded-xl text-sm font-semibold transition '+(previewTab==='ai'?'bg-indigo-500 text-white':'bg-gray-100 text-gray-500 hover:bg-gray-200')}>
+            🎨 AI 이미지
+          </button>
+        </div>
 
-            <!-- 콘텐츠 (padding은 A4 비율 기준 %) -->
-            <div style="position:absolute;inset:0;padding:7%;display:flex;flex-direction:column">
-              <!-- 상단 강조선 -->
-              <div style=${{width:'15%',height:'3px',borderRadius:'2px',background:accent,marginBottom:'5%'}}></div>
-
-              <!-- 소개글 -->
-              ${intro?html`
-                <p style=${{fontSize:'clamp(9px,1.8vw,13px)',opacity:.75,marginBottom:'4%',lineHeight:1.7,fontFamily:bf,color:textC,whiteSpace:'pre-line'}}>
-                  ${intro}
-                </p>
-              `:''}
-
-              <!-- 제목 영역 (중앙) -->
-              <div style="flex:1;display:flex;flex-direction:column;justify-content:center">
-                <h1 style=${{fontSize:'clamp(16px,4vw,32px)',fontWeight:900,lineHeight:1.25,marginBottom:'4%',fontFamily:tf,color:textC,wordBreak:'keep-all'}}>
-                  ${title||'책 제목'}
-                </h1>
-                ${sub?html`
-                  <p style=${{fontSize:'clamp(10px,2vw,15px)',opacity:.8,lineHeight:1.7,fontFamily:bf,color:textC,wordBreak:'keep-all'}}>
-                    ${sub}
-                  </p>
-                `:''}
+        <!-- 텍스트 표지 탭 -->
+        ${previewTab==='text'?html`
+          <div style="position:relative;width:100%;padding-bottom:141.4%">
+            <div ref=${coverRef} style=${{
+              position:'absolute', inset:0,
+              background: gradientStyle,
+              backgroundColor: bg1,
+              color: textC,
+              borderRadius:'8px',
+              overflow:'hidden',
+              boxShadow:'0 8px 32px rgba(0,0,0,0.18)',
+            }}>
+              <!-- 장식 요소 -->
+              <div style="position:absolute;inset:0;pointer-events:none;opacity:.1">
+                <div style=${{position:'absolute',top:'6%',right:'8%',width:'22%',height:'22%',borderRadius:'50%',border:`2px solid ${accent}`}}></div>
+                <div style=${{position:'absolute',bottom:'12%',left:'5%',width:'14%',height:'14%',borderRadius:'50%',border:`1px solid ${accent}`}}></div>
+                <div style=${{position:'absolute',top:'20%',left:'8%',width:'1.5%',height:'12%',borderRadius:'4px',background:accent}}></div>
+                <div style=${{position:'absolute',top:'20%',left:'12%',width:'1%',height:'8%',borderRadius:'4px',background:accent}}></div>
               </div>
-
-              <!-- 하단 바 -->
-              <div style=${{paddingTop:'4%',borderTop:`1px solid ${dividerColor}`,display:'flex',justifyContent:'space-between',alignItems:'center'}}>
-                <p style=${{fontSize:'clamp(9px,1.8vw,13px)',fontWeight:600,opacity:.9,fontFamily:bf,color:textC}}>
-                  ${author||'저자명'}
-                </p>
-                <span style=${{color:accent,fontSize:'clamp(12px,2.5vw,20px)'}}>◈</span>
+              <!-- 콘텐츠 -->
+              <div style="position:absolute;inset:0;padding:7%;display:flex;flex-direction:column">
+                <div style=${{width:'15%',height:'3px',borderRadius:'2px',background:accent,marginBottom:'5%'}}></div>
+                ${intro?html`<p style=${{fontSize:'clamp(9px,1.8vw,13px)',opacity:.75,marginBottom:'4%',lineHeight:1.7,fontFamily:bf,color:textC,whiteSpace:'pre-line'}}>${intro}</p>`:''}
+                <div style="flex:1;display:flex;flex-direction:column;justify-content:center">
+                  <h1 style=${{fontSize:'clamp(16px,4vw,32px)',fontWeight:900,lineHeight:1.25,marginBottom:'4%',fontFamily:tf,color:textC,wordBreak:'keep-all'}}>
+                    ${title||'책 제목'}
+                  </h1>
+                  ${sub?html`<p style=${{fontSize:'clamp(10px,2vw,15px)',opacity:.8,lineHeight:1.7,fontFamily:bf,color:textC,wordBreak:'keep-all'}}>${sub}</p>`:''}
+                </div>
+                <div style=${{paddingTop:'4%',borderTop:`1px solid ${dividerColor}`,display:'flex',justifyContent:'space-between',alignItems:'center'}}>
+                  <p style=${{fontSize:'clamp(9px,1.8vw,13px)',fontWeight:600,opacity:.9,fontFamily:bf,color:textC}}>${author||'저자명'}</p>
+                  <span style=${{color:accent,fontSize:'clamp(12px,2.5vw,20px)'}}>◈</span>
+                </div>
               </div>
             </div>
           </div>
-        </div>
-
-        <!-- 현재 색상 정보 -->
-        <div class="mt-3 grid grid-cols-4 gap-2">
-          ${[
-            {label:'배경1', color:bg1},
-            {label:'배경2', color:bg2},
-            {label:'텍스트', color:textC},
-            {label:'강조', color:accent},
-          ].map(({label,color})=>html`
-            <div key=${label} class="text-center">
-              <div style=${{background:color,height:'20px',borderRadius:'4px',marginBottom:'3px',border:'1px solid #e5e7eb'}}></div>
-              <p class="text-xs text-gray-400">${label}</p>
-              <p class="text-xs text-gray-500 font-mono">${color}</p>
-            </div>
-          `)}
-        </div>
-        ${fonts.length>0?html`
-          <div class="mt-2 p-2 bg-gray-50 rounded-lg flex gap-2 flex-wrap">
-            ${fonts.map((f,i)=>html`<span key=${f.id} class="text-xs bg-white border border-gray-200 px-2 py-1 rounded text-gray-600">${i+1}. ${f.name}</span>`)}
+          <button onClick=${saveAsJpg} disabled=${saving}
+            class="w-full mt-3 g-btn rounded-xl py-2.5 font-bold disabled:opacity-50 transition text-sm">
+            ${saving?'⏳ 저장 중...':'💾 텍스트 표지 JPG 저장'}
+          </button>
+          <!-- 색상 정보 -->
+          <div class="mt-3 grid grid-cols-4 gap-2">
+            ${[{label:'배경1',color:bg1},{label:'배경2',color:bg2},{label:'텍스트',color:textC},{label:'강조',color:accent}].map(({label,color})=>html`
+              <div key=${label} class="text-center">
+                <div style=${{background:color,height:'20px',borderRadius:'4px',marginBottom:'3px',border:'1px solid #e5e7eb'}}></div>
+                <p class="text-xs text-gray-400">${label}</p>
+                <p class="text-xs text-gray-500 font-mono">${color}</p>
+              </div>
+            `)}
           </div>
+          ${fonts.length>0?html`
+            <div class="mt-2 p-2 bg-gray-50 rounded-lg flex gap-2 flex-wrap">
+              ${fonts.map((f,i)=>html`<span key=${f.id} class="text-xs bg-white border border-gray-200 px-2 py-1 rounded text-gray-600">${i+1}. ${f.name}</span>`)}
+            </div>
+          `:''}
+        `:''}
+
+        <!-- AI 이미지 탭 -->
+        ${previewTab==='ai'?html`
+          ${bgImg?html`
+            <div style="position:relative;width:100%;padding-bottom:141.4%">
+              <img src=${bgImg} style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover;border-radius:8px;box-shadow:0 8px 32px rgba(0,0,0,0.18);"/>
+            </div>
+            <p class="text-xs text-gray-400 text-center mt-2">AI 이미지 원본 (텍스트 오버레이 없음)</p>
+          `:html`
+            <div style="position:relative;width:100%;padding-bottom:141.4%">
+              <div style="position:absolute;inset:0;border:2px dashed #c7d2fe;border-radius:8px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;background:#f5f3ff">
+                <p class="text-4xl">🎨</p>
+                <p class="text-sm text-indigo-400 font-medium text-center px-4">왼쪽 패널에서<br/>AI 이미지를 업로드하세요</p>
+              </div>
+            </div>
+          `}
         `:''}
       </div>
     </div>
